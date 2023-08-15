@@ -1,0 +1,252 @@
+@name renTripwire
+@persist [CHECK_FREQUENCY]:number
+@persist [UNKNOWNCOM IFFCOM]:number [ID]:string
+@persist [VERSION]:string
+@persist [RiffleResponse]:number [RiffleData]:array
+@model models/weapons/w_slam.mdl
+@trigger none
+#[
+E2 By:
+    Renco - Everything
+
+!!!!!
+RE-DISTRIBUTE I GUESS
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+A little tripwire E2 that sends notifications over SCRL when tripped, has rIFFLe integration
+
+
+
+//////////VERSION LOG\\\\\\\\\
+V0.0.0 (10-28-20) - Initial Devloplment
+V0.0.1 (10-29-20) -
+    [ADDED] Chat commands: ver, help, man, scrl, id, resp, rate
+    [ADDED] SCRL Integration; Sends a message on SCRL when tripped
+    [ADDED] rIFFLe Inegration; Sends different SCRL commands based on if the tripper sends a valid response or not, configureable
+    [CHANGED] Changed model to a SLAM with the thingy deployed
+
+
+
+//////////TO-DO\\\\\\\\\\
+
+/////DONE\\\\\#
+Respond differently to IFF
+    Somthing tripped [TRIPWIRE]
+    [IFFDATA] tripped the tripwire!
+
+]#
+
+
+#//////////INITIALIZATION\\\\\\\\\#
+#Reset the E2 if we have been duped or the dupe has finished spawning
+if (duped()|dupefinished()) {reset()}
+
+#Keeping you protected from people who want to spook you since 2020
+if(first())
+{
+    #//////SETTINGS\\\\\#
+    #The ID of the tripwire, set this to somthing unique, like the location it's placed in
+    ID = "Tripwire" #Default: "Tripwire"
+
+    #What type of command to send if the tripwire gets tripped by somthing that didnt respond to IFF
+    UNKNOWNCOM = 1 #Default: 1
+
+    #What type of command to send if we recieved an IFF
+    IFFCOM = 6 #Default: 6
+
+
+    #/////LIBRARIES\\\\\#
+    #include "SCRL"
+    #include "renIFFLib"
+
+
+
+    #/////INITIALIZE VARIABLES\\\\\#
+    #//FREQUENCIES\\#
+    CHECK_FREQUENCY = 100 #Default: 100; Don't set this too low or the interrogatee likely wont respond in time.
+
+    #//MANUAL\\#
+    MANUAL = table() #Purely for skookum factor
+    MANUAL["ver",string]  = "Print's the E2's version into chat along with credits."
+    MANUAL["help",string] = "Prints out available chat commands."
+    MANUAL["man",string]  = "Prints out a description of the provided command. <COMMAND>"
+    MANUAL["scrl",string] = "Sets SCRL channel and password. <CHANNEL> <PASSWORD>"
+    MANUAL["id",string]   = "Sets the ID manually, if you forgot. <ID>"
+    MANUAL["resp",string] = "Sets or views the current command responses to being tripped. <UNKOWN> <KNOWN>"
+    MANUAL["rate",string] = "Sets the rate at which the E2 checks for disturbances. <RATE>"
+
+
+
+    #/////FUNCTIONS\\\\\#
+    #[Notfies the owner of a message
+    Inputs:
+        Message [STRING] - The message you wish to hint
+    ]#
+    function void ownerNotify(Message:string)
+    {
+        hint("[renTripwire] {"+ID+"} "+Message,5.5)
+    }
+
+    #[Tells the owner by printing somthing in his/her chat
+    Inputs:
+        Message [STRING] - The message you wish to print
+    ]#
+    function void ownerTell(Message:string)
+    {
+        print("[renTripwire] {"+ID+"} "+Message)
+    }
+
+
+
+    #/////FINALIZATION\\\\\#
+    #//MISC\\#
+    runOnChat(1)
+
+    #ifdef entity:setBodygroup(number,number)
+        entity():setBodygroup(0,1)
+    #endif
+
+    #Reminder to set SCRL things for proper operation
+    ownerNotify("Dont forget to set the SCRL channel and password!")
+
+
+    #//VERSION\\#
+    VERSION = "V0.0.1"
+    setName("renTripwire "+VERSION+"; "+ID)
+}
+
+
+
+#//////////CHAT COMMANDS\\\\\\\\\\#
+elseif(chatClk(owner()))
+{
+    local Said = owner():lastSaid():lower()
+    local Split = Said:explode(" ")
+    local Token = Split:string(1)
+    local Identity = Split:string(2)
+    local Command = Split:string(3)
+    local Arg1 = Split:string(4)
+    local Arg2 = Split:string(5)
+
+    if(Token == "trip")
+    {
+        if(Identity == ID:lower())
+        {
+            switch(Command)
+            {
+                case "version",
+                case "ver",
+                    ownerTell(VERSION+" By: Renco.")
+                break
+
+                case "help",
+                case "hel",
+                    ownerTell("Commands: help, man, scrl, id.")
+                break
+
+                case "manual",
+                case "man",
+                    if(MANUAL:exists(Arg1)) {ownerTell(Arg1+": "+MANUAL[Arg1,string])}
+                    else{ownerTell("Manual entry "+Arg1+" not found, please use help for a list of commands.")}
+                break
+
+                case "scrl",
+                    if(Arg1&Arg2) {scr_updateSettings(Arg1,Arg2) ownerNotify("Setting new SCRL channel settings.")}
+                    else{ownerNotify("Please specify a channel and password!")}
+                break
+
+                case "id",
+                    if(Arg1) {ID = Arg1 setName("renTripwire "+VERSION+"; "+Arg1) ownerNotify("Setting ID to: "+Arg1+".")}
+                    else{ownerNotify("Please specify an ID.")}
+                break
+
+                case "response",
+                case "resp",
+                    if(Arg1&Arg2) {UNKNOWNCOM = Arg1:toNumber() IFFCOM = Arg2:toNumber() ownerNotify("Setting unkown command to: "+Arg1+", setting known command to: "+Arg2+".")}
+                    elseif(Arg1) {ownerNotify(UNKNOWNCOM = Arg1:toNumber() ownerNotify("Setting unkown command to: "+Arg1+"."))}
+                    else{ownerNotify("Unkown command set to: "+UNKNOWNCOM+", known command set to: "+Arg2+".")}
+                break
+
+                case "rate",
+                    if(Arg1) {CHECK_FREQUENCY = Arg1:toNumber() ownerNotify("Setting checking rate to: "+Arg1+".")}
+                    else{ownerNotify("Please specify a checking rate. Default: 100")}
+                break
+
+                default,
+                    ownerNotify("Command "+Command+" not found.")
+                break
+            }
+        }
+
+        #Forces every E2 to respond.
+        elseif(!Identity:length()&!(Arg1|Arg2))
+        {
+            ownerNotify("I'm here!")
+        }
+
+        hideChat(1)
+    }
+}
+
+
+
+#//////////MAIN CODE\\\\\\\\\\#
+#Checks the ranger, alerts everyone on SCRL
+elseif(clk("check",CHECK_FREQUENCY))
+{
+    timer("check",CHECK_FREQUENCY)
+
+    #Someone just tripped
+    if(Range&(RiffleResponse == 0))
+    {
+        local RIFFLE = renIFFLStart(ID + entity():id(),RangerPos,curtime())
+
+        scr_transmit(5,RIFFLE[1,string],RIFFLE[2,vector],noentity())
+
+        RiffleResponse = -1
+    }
+
+    #We didn't get a response in time
+    if(RiffleResponse == -1)
+    {
+        RiffleResponse = 0
+
+        scr_transmit(UNKNOWNCOM,"<renTripwire> {"+ID+"} "+"Somthing has tripped the tripewire!",noentity())
+    }
+
+    #We got a response
+    elseif(RiffleResponse == 1)
+    {
+        RiffleResponse = 0
+
+        scr_transmit(IFFCOM,"<renTripwire> {"+ID+"} "+RiffleData[1,string]+" has tripped the tripwire!",noentity())
+
+        RiffleData = array()
+    }
+}
+
+#RIFFLE integration
+elseif(dsClk())
+{
+    #Recieve new SCRL data
+    SCRLData = scr_recieve(noentity())
+
+    #Figure out what to do
+    local RIFFLE = renIFFLRecieve(SCRLData,ID + entity():id(),entity():pos(),curtime())
+
+    #Valid IFF response
+    if(RIFFLE:count() == 1)
+    {
+        RiffleData = RIFFLE
+        RiffleResponse = 1
+    }
+
+    #IFF Response
+    elseif(RIFFLE:count() == 3)
+    {
+        scr_transmit(5,RIFFLE[1,string],RIFFLE[2,vector],noentity())
+    }
+}

@@ -1,0 +1,41 @@
+@name R724 Holos
+@inputs [AmmoCrate]:entity [Munitions]:number
+@persist [SHELLS]:array
+@trigger [Munitions]
+#By: Renco
+if(duped()|dupefinished()) {reset()}
+
+if(first())
+{
+    local Index = 0
+    if(AmmoCrate:isValid()&(->Munitions))
+    {
+        for(R=1,6)
+        {
+            local Shell = vec2(Index,0)
+            local Backward = inrange(R,4,6)
+            local Pos = vec(-22.5+(Backward*26),-2.5,(R*5)-(Backward*15))
+            holoCreate(Index,AmmoCrate:toWorld(Pos+vec(0)),vec(1),AmmoCrate:toWorld(ang(90,0,0)),vec4(255),"models/munitions/round_80mm_mortar.mdl")
+            holoParent(Index,AmmoCrate)
+            Index++
+
+            Shell = Shell:setY(Index)
+            holoCreate(Index,AmmoCrate:toWorld(Pos+vec(-9,0,0)),vec(0.4),AmmoCrate:toWorld(ang(90,0,0)),vec4(255),"models/munitions/shell_casing.mdl")
+            holoParent(Index,AmmoCrate)
+            Index++
+            SHELLS:pushVector2(Shell)
+        }
+
+        AmmoCrate:setAlpha(0)
+    }
+}
+
+elseif(inputClk())
+{
+    for(H=1,SHELLS:count())
+    {
+        local Shell = SHELLS[H,vector2]
+        local Used = (H<=Munitions) 
+        for(P=1,2) {holoColor(Shell[P],vec4(255)*Used)}
+    }
+}

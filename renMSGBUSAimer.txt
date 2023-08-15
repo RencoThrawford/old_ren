@@ -1,0 +1,112 @@
+@name renMSGBUSAimer
+@inputs [MSGBUS]:table [Aimpos]:vector #Normal Inputs
+@outputs [FlightTime]:number [BallisticSolution]:vector [BallisticTable]:table #Normal Outputs
+@persist [VERSION]:string #Global Variables
+@trigger [MSGBUS]
+#[
+E2 By:
+    Renco - Making it work
+    Red - MSGBUS
+
+!!!!!
+DO-NOT RE-DISTRIBUTE!
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+Debug input/output for MSGBUS testing
+
+
+
+//////////VERSION LOG\\\\\\\\\\
+V0.0.0 (10-20-20) - Initial Development
+V1.0.0 (10-20-20) - Functionally Complete
+
+
+
+//////////TO-DO\\\\\\\\\\
+
+/////DONE\\\\\
+
+
+
+//////////MSGBUS\\\\\\\\\\
+/////MSGBUS INPUTS\\\\\
+MAIN_GUN_SELECTED_FLIGHT_TIME        [NUMBER]  - Flight time
+MAIN_GUN_SELECTED_BALLISTIC_SOLUTION [VECTOR3] - Ballistic solution
+BALLISTIC_COMPUTER_TABLE             [TABLE]   - Table of the currently selected ammunition
+
+/////MSGBUS OUTPUTS\\\\\
+TEST_TARGET [VECTOR3] - Target for testing
+]#
+
+
+#//////////INITIALIZATION\\\\\\\\\#
+#Reset the E2 if we have been duped or the dupe has finished spawning
+if (duped()|dupefinished()) {reset()}
+
+#Last
+if(first())
+{
+    #/////INITIALIZE VARIABLES\\\\\#
+    #//FREQUENCIES\\#
+    AIMPOS_FREQUENCY = 25 #Default: 25
+
+
+
+    #/////FUNCTIONS\\\\\#
+    #Get stuff from the bus
+    function void msgBusIn()
+    {
+        if(->MSGBUS)
+        {
+            FlightTime = MSGBUS["MAIN_GUN_SELECTED_FLIGHT_TIME",number]
+            BallisticSolution = MSGBUS["MAIN_GUN_SELECTED_BALLISTIC_SOLUTION",vector]
+            BallisticTable = MSGBUS["BALLISTIC_COMPUTER_TABLE",table]
+        }
+    }
+
+    #Push stuff to the bus
+    function void msgBusOut()
+    {
+        if(->MSGBUS)
+        {
+            MSGBUS["TEST_TARGET",vector] = Aimpos
+        }
+    }
+
+
+
+    #/////INTIIALIZE\\\\\#
+    #//TIMERS\\#
+    timer("aimpos",AIMPOS_FREQUENCY)
+
+
+    #//VERSION\\#
+    VERSION = "V0.0.0"
+    setName("[renMSGBUSAimer] "+VERSION)
+
+
+    #//FINALIZE MSGBUS\\#
+    MSGBUS["NODE_NAMES",array]:pushString(entity():getName())
+    msgBusIn()
+    msgBusOut()
+}
+
+
+
+#//////////MAIN CODE\\\\\\\\\\#
+#MSGBUS has updated, get the new info
+if(inputClk())
+{
+    msgBusIn()
+}
+
+#The aimpos timer has ticked over, start over and update the bus with our new data
+elseif(clk("aimpos"))
+{
+    timer("aimpos",AIMPOS_FREQUENCY)
+
+    msgBusOut()
+}

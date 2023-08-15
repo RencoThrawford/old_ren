@@ -1,0 +1,195 @@
+@name renHoverMobilityLib
+@persist [RenHML_MAXTHRUST]:number [RenHML_VERSION]:string 
+#[
+E2 Library By:
+    Renco - Nearly Everything
+    Xanuch - PID
+
+!!!!!
+REALLY DO-NOT RE-DISTRIBUTE!
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+This library does hovering stuff
+
+
+
+//////////VERSION LOG\\\\\\\\\\
+V0.0.0 (01-08-21) - Initial Development
+V0.0.1 (01-08-21)
+    [ADDED] array renHML_PID(number,number,vector2,array,vector); A PID to control thrusters
+    [ADDED] number renHML_Smoother(number,number,number); A smoother to smooth thruster rotation among other things
+    [ADDED] entity:renHML_Thrust(entity,number); Applys thrust to an entity relative to an entity
+    [ADDED] array entity:renHML_Rangers(); Compiles ranger data into an array of distances
+    [ADDED] array array:renHMLRoll(number,number); Modifies distance data to roll the vehicle
+    [ADDED] table array:renHML_RangerPID(number,vector2,vector,table); Performs PIDS on the distance data, returning an array of PIDS
+    [ADDED] entity:renHML_Thrust(table,array); Applies thrust to the vehicle relative to an array of entities using PID data
+    [ADDED] vector2 renHML_EvalArmAng(number,number,number,number,vector2); Outputs angles for left and right arms
+V0.0.2 (01-09-21)
+    [ADDED] entity:renHML_DriftDamping(); Apply force damping on the y axis
+V0.0.3 (01-10-21)
+    [FIXED] Fixed drift damping not damping drift
+    [CHANGED] Reduced maximum thrust to lessen spazzing
+
+
+
+//////////TO-DO\\\\\\\\\\
+
+/////DONE\\\\\
+]#
+RenHML_VERSION = "V0.0.3"
+RenHML_MAXTHRUST = 100
+
+
+
+#//////////FUNCTIONS\\\\\\\\\#
+#[A PID, does PID things
+Inputs:
+    SetPoint [NUMBER] - Desired number (Height, Speed, etc.)
+    ProcessedVariable [NUMBER] - Current number (Current height, speed, etc.)
+    Clamp [VECTOR2] - Clamp for integral vec2(min,max)
+    LastReturn [ARRAY] - What the function last returned
+    PIDSettings [VECTOR] - Settings for a pid vec(Kp,Ki,Kd)
+Return:
+    [ARRAY] - Current state of the PID (Could also potentially used for visualization)
+        array(Output,LastError,P,I,D)
+]#
+function array renHML_PID(SetPoint:number,ProcessedVariable:number,Clamp:vector2,LastReturn:array,PIDSettings:vector)
+{
+    local LastError = LastReturn[2,number]
+    local P = LastReturn[3,number]
+    local I = LastReturn[4,number]
+    local D = LastReturn[5,number]
+    local Error = SetPoint - ProcessedVariable
+    P = Error * PIDSettings[1]
+    I += Error * PIDSettings[2],I = clamp(I,Clamp[1],Clamp[2])
+    D = (Error-LastError) * PIDSettings[3]
+    return array((P+I+D),Error,P,I,D)
+}
+
+#[A smoother, smooths thing
+Inputs:
+    CurValue [NUMBER] - What the number we're currently smoothing is
+    Target [NUMBER] - Target value to reach
+    Rate [NUMBER] - How much to increase/decrease when ran
+Return:
+    [NUMBER] - The next step, return this to CurValue in a loop to smooth
+]#
+function number renHML_Smoother(CurValue:number,Target:number,Rate:number)
+{
+    local Return = CurValue,Return += clamp(Target-CurValue,-Rate,Rate)
+    return Return
+}
+
+#[Applies force to an entity relative to an entity
+Inputs:
+    [ENTITY] - The entity the force will be applied to
+    Relative [ENTITY] - The entity the force will come from
+    Thrust [NUMBER] - Thrust in upwards direction of the Relative entity
+]#
+function void entity:renHML_Thrust(Relative:entity,Thrust:number)
+{
+    This:applyOffsetForce((Relative:up()*Thrust)*This:mass(),Relative:pos())
+}
+
+#[Gets ranger data from each corner of the supplied entity
+Inputs:
+    [ENTITY] - Entity used for rangers
+Return:
+    [ARRAY] - Array of ranger distances array(FL,FR,RL,RR)
+]#
+function array entity:renHML_Rangers()
+{
+    local Return = array()
+    if(This:isValid())
+    {
+        local Size = This:boxSize()/2
+        for(R=1,4)
+        {
+            local Rears = (inrange(R,3,4) ? -1 : 1)
+            local Rights = (((R%2)==0) ? -1 : 1)
+            local Dir = -(This:up()+((This:right()*Rights)-(This:forward()*Rears))/2)
+            Return:pushNumber(rangerOffset(1000,This:toWorld(vec(Size[1]*Rears,Size[2]*Rights,0)),Dir):distance())
+        }
+    }
+    return Return
+}
+
+#[Modifies ranger distance data to roll the vehicle
+Inputs:
+    [ARRAY] - Ranger distance data
+    LR [NUMBER] - -1/1 Left/Right movement
+    DistOffset - Amount to add/subtract to ranger data
+Return:
+    [ARRAY] - Modified ranger distance data
+]#
+function array array:renHMLRoll(LR:number,DistOffset:number)
+{
+    local Return = array()
+    for(R=1,This:count())
+    {
+        local Rights = (((R%2)==0) ? -1 : 1)
+        Return:pushNumber(This[R,number]+((DistOffset*LR)*Rights))
+    }
+    return Return
+}
+
+#[Performs PID(s) on ranger distance data
+Inputs:
+    [ARRAY] - Ranger distance data
+    SetPoint [NUMBER] - Desired number
+    Clamp [VECTOR2] - Clamp for integral
+    PIDSettings [VECTOR] - Settings for PID
+    LastReturn [TABLE] - Previous data returned from this function
+Return:
+    [TABLE] - PID(s)
+]#
+function table array:renHML_RangerPID(SetPoint:number,Clamp:vector2,PIDSettings:vector,LastReturn:table)
+{
+    local Return = table()
+    for(P=1,This:count())
+    {
+        Return[P,array] = renHML_PID(SetPoint,This[P,number],Clamp,LastReturn[P,array],PIDSettings)
+    }
+    return Return
+}
+
+#[Applies force to an entity using PID data
+Inputs:
+    [ENTITY] - Entity to apply force to
+    PIDS [TABLE] - Table of PID(s)
+    Arms [ARRAY] - Array of entities to apply force relative to
+]#
+function void entity:renHML_Thrust(PIDS:table,Arms:array)
+{
+    for(T=1,PIDS:count())
+    {
+        This:renHML_Thrust(Arms[T,entity],clamp(PIDS[T,array][1,number],0,RenHML_MAXTHRUST))
+    }
+}
+
+#[Evaluates the angles for left and right arms with smoothing
+Inputs:
+    WS [NUMBER] - -1/1 Forwards/Backwards
+    AD [NUMBER] - -1/1 Yaw Left/Right
+    MaxArmAng [NUMBER] - Maximum angle
+    Rate [NUMBER] - Angle increase per execution
+    LastReturn [VECTOR2] - Previous data returned from this function for smoothing
+]#
+function vector2 renHML_EvalArmAng(WS:number,AD:number,MaxArmAng:number,Rate:number,LastReturn:vector2)
+{
+    local Left = renHML_Smoother(LastReturn[1],clamp((WS-AD),-1,1)*MaxArmAng,Rate)
+    local Right = renHML_Smoother(LastReturn[2],clamp((WS+AD),-1,1)*MaxArmAng,Rate)
+    return vec2(Left,Right)
+}
+
+#[Applyforce drift damping in the y axis
+Inputs:
+    [ENTITY] - Entity to be damped
+]#
+function entity:renHML_DriftDamping()
+{
+    This:applyForce((This:right()*(This:velL():y()/10))*This:mass())
+}

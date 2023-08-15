@@ -1,0 +1,93 @@
+@name renShiguFlag
+#[
+#E2 By:
+    Renco - Flag
+    Mick39 - Wedges.
+
+
+!!!!!
+DO NOT RE-DISTRIBUTE
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+Wedge flag
+
+
+
+//////////VERSION LOG\\\\\\\\\
+V0.0.0 (10-23-20) - Initial Devlopment
+V1.0.0 (10-23-20) - Functionally Complete
+
+
+
+//////////TO-DO\\\\\\\\\\
+Other flags?
+
+/////DONE\\\\\
+]#
+
+
+#//////////INITIALIZATION\\\\\\\\\\#
+#Reset the E2 if we have been duped or the dupe has finished spawning
+if (duped()|dupefinished()) {reset()}
+
+#Legendary general, Rain Silves
+if(first())
+{
+    #/////SETTINGS\\\\\#
+    #//TEXTURES\\#
+    #Changes all of the textures to whatever you want
+    local Texture = "WTP/paint_3" #Default is "WTP/metal_2"
+
+
+    #//SCALING\\#
+    #Changes the scaling of the whole thing
+    local Scale = 1 #Default: 1
+
+    #Changes the thickness of the whole thing
+    local Thickness = 1 #Default: 1
+
+
+    #//MISC\\#
+    #Changes at what index the holograms will start to spawn at
+    local Index = 0 #Default: 0
+
+
+    
+    #/////HOLOGRAMS\\\\\#
+    #Background
+    holoCreate(Index) #Create the holo
+    holoAng(Index,entity():toWorld(ang(0))) #Set the holo's ang when we convert the angle relative to the chip to the world
+    holoScale(Index,vec(1.3,2.1,0.1*Thickness)*Scale) #Set the scale, this is where we also set the thickness of the holo
+    holoParent(Index,entity()) #Parent the holo to the chip
+    holoMaterial(Index,Texture)
+    holoColor(Index,vec(0,50,77)) #Set the holo's colour to the background colour of the flag
+    Index++
+
+    #White Band
+    holoCreate(Index)
+    holoAng(Index,entity():toWorld(ang(0)))
+    holoScale(Index,vec(0.5,2.1,0.15*Thickness)*Scale)
+    holoParent(Index,entity())
+    holoMaterial(Index,Texture)
+    Index++
+
+    #Red Band
+    holoCreate(Index)
+    holoAng(Index,entity():toWorld(ang(0)))
+    holoScale(Index,vec(0.4,2.1,0.2*Thickness)*Scale)
+    holoParent(Index,entity())
+    holoMaterial(Index,Texture)
+    holoColor(Index,vec(144,31,75))
+    Index++
+
+    #White Ring
+    holoCreate(Index)
+    holoModel(Index,"models/sprops/geometry/fring_42.mdl")
+    holoAng(Index,entity():toWorld(ang(0,0,90)))
+    holoScale(Index,vec(0.32,0.6*Thickness,0.32)*Scale)
+    holoMaterial(Index,Texture)
+    holoParent(Index,entity())
+}

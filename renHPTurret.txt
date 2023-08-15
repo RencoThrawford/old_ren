@@ -1,0 +1,489 @@
+@name renHPTurret
+@inputs [MSGBUS]:table #Generic Input
+@inputs [Gun1 Gun2 Gun3 Gun4 Gun5]:entity [Ring1 Ring2 Ring3 Ring4 Ring5]:entity [Parent1 Parent2 Parent3 Parent4 Parent5]:entity #Turret inputs
+@outputs [Gun1Fire Gun2Fire Gun3Fire Gun4Fire Gun5Fire]:number [Reload]:number #Gun outputs
+@persist [TURRET_FREQUENCY PARENT_FREQUENCY]:number #Frequencies
+@persist [Fire_Command Flight_Time Target_Weight]:number [Ballistic_Solution Aimpos Velocity]:vector [Gunner]:entity [Fire_Plan Self]:array #MSGBUS Inputs
+@persist [Weapons_Free Override Main_Gun_Parabolic]:number [Current_Gun]:entity #MSGBUS Outputs
+@persist [PARABOLICS GUNS RINGS PARENTS]:array [GUNSETTINGS]:table #Global Variables
+@persist [SelectedGun Parents Saftey Ready CurParents]:number [TargetPos]:vector [FloatingAngles RingReadies GunReadies]:array #"Runtime" Variables
+@persist [LOCKERVOLUME]:number [GUNOFFSETPOS GUNOFFSETANG RINGOFFSETPOS RINGOFFSETANG TRAVERSESOUNDS RELOADSOUNDS RELOADSOUNDTIMES]:array
+@trigger [MSGBUS]
+runOnKeys(Gunner,1)
+#[
+E2 By:
+    Renco - Making it work
+    Red - MSGBUS, function?
+
+!!!!!
+REALLY DO-NOT RE-DISTRIBUTE!
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+A simple holo parent turret E2, also does ammunition switching
+
+
+
+//////////VERSION LOG\\\\\\\\\\
+V0.0.0 (10-14-20) - Initial Devlopment
+V0.0.1 (10-26-20) - Functional
+V0.0.2 (12-07-20) -
+    [UPDATED] Updated renASL to use V2.0.0
+    [UPDATED] Turret code to use parents for pintle mounts
+V0.0.3 (12-11-20) -
+    [UPDATED] - Overhauled holo creation code
+    [FIXED] - Fixed turret not aiming at aimpos+ballistic solution
+    [FIXED] - FloatingAngles array was not persisted
+V1.0.0 (12-26-20) -
+    [FIXED] Fixed bus not updating with new weapons_free when toggling turret off
+    [FIXED] Fixed current_gun not updating
+V1.0.1 (12-27-20) -
+    [UPDATED] Tweaked turret parenting code to ignore parenting for rings on turrets with IgnoresHolos set to 2
+    [FIXED] Fixed gun hologram not spawning for casemate (No turret ring) guns
+    [FIXED] Fixed parenting code not parenting all rings
+V1.0.2 (12-28-20)
+    [UPDATED] Updated parent code to use new function introduced in renHPTurretLib V1.0.1
+    [FIXED] Fixed parent code not using centre of mass like the debug hologram (For guns)
+V1.0.3 (12-30-20)
+    [ADDED] Added traverse sounds
+    [ADDED] Added option to change lock/unlock sound volume
+V1.0.4 (01-09-21)
+    [ADDED] Added reload sounds
+
+
+
+//////////TO-DO\\\\\\\\\\
+Reload pitch
+Stabilizer
+
+/////DONE\\\\\
+
+
+
+//////////MSGBUS\\\\\\\\\\
+/////MSGBUS INPUTS\\\\\
+MAIN_GUN_SELECTED_BALLISTIC_SOLUTION [VECTOR3] - Ballistic solution to add to aimpos
+AIMPOS       [VECTOR3] - Where we're aiming
+GUNNER       [ENTITY]  - Gunner controlling turret
+VELOCITY     [VECTOR3] - Current vehicle velocity
+FIRE_COMMAND [NUMBER]  - Fire the gun
+FIRE_PLAN    [NUMBER]  - Fire plan from radio
+SELF         [ENTITY]  - Self to filter from gun
+MAIN_GUN_SELECTED_FLIGHT_TIME [NUMBER] - Time of flight of the current shell
+TARGET_TRACK [NUMBER]  - Target track weight for AA
+
+/////MSGBUS OUTPUTS\\\\\
+MAIN_GUN_SELECTED     [ENTITY] - Gun used for aiming
+WEAPONS_FREE          [NUMBER] - If the weapons are freely moving or locked down
+WEAPONS_OVERRIDE      [NUMBER] - If the aim system is not using fire gating
+MAIN_GUN_IS_PARABOLIC [NUMBER] - Weapon selected defaults to parabolic
+]#
+
+
+#//////////INITIALIZATION\\\\\\\\\\#
+#Reset the E2 if we have been duped or the dupe has finished spawning
+if(duped()|dupefinished()) {reset()}
+
+#
+if(first())
+{
+    #/////SETTINGS\\\\\#
+    #//TRAVERSE\\#
+    #Sets the minimum and maximum traverses
+    local MinimumTraverses = array(ang(-30,-180,0),ang(0,0,0),ang(0,0,0),ang(0,0,0),ang(0,0,0)) #Default: array(ang(-10,-180,0),ang(0,0,0),ang(0,0,0),ang(0,0,0),ang(0,0,0))
+    local MaximumTraverses = array(ang(35,180,0),ang(0,0,0),ang(0,0,0),ang(0,0,0),ang(0,0,0)) #Default: array(ang(15,180,0),ang(0,0,0),ang(0,0,0),ang(0,0,0),ang(0,0,0))
+
+    #Set the traverse rates for each turret, in deg/s?
+    local TraverseRates = array(ang(12.5,15,0),ang(10,15,0),ang(0,0,0),ang(0,0,0),ang(0,0,0)) #Default: array(ang(15,20,0),ang(0,0,0),ang(0,0,0),ang(0,0,0),ang(0,0,0))
+
+    #Offset positions, you might want to enable Debug mode in the MISC section to see what you're doing!
+    GUNOFFSETPOS = array(vec(-31.049559,0,0),vec(0,0,0),vec(0,0,0),vec(0,0,0),vec(0,0,0)) #Default: array(vec(0,0,0),vec(0,0,0),vec(0,0,0),vec(0,0,0),vec(0,0,0))
+    GUNOFFSETANG = array(ang(0,0,0),ang(0,0,0),ang(0,0,0),ang(0,0,0),ang(0,0,0)) #Default: array(ang(0,0,0),ang(0,0,0),ang(0,0,0),ang(0,0,0),ang(0,0,0))
+    RINGOFFSETPOS = array(vec(32.083736,0,0),vec(0,0,0),vec(0,0,0),vec(0,0,0),vec(0,0,0)) #Default: array(vec(0,0,0),vec(0,0,0),vec(0,0,0),vec(0,0,0),vec(0,0,0))
+    RINGOFFSETANG = array(ang(0,0,0),ang(0,0,0),ang(0,0,0),ang(0,0,0),ang(0,0,0)) #Default: array(ang(0,0,0),ang(0,0,0),ang(0,0,0),ang(0,0,0),ang(0,0,0))
+
+    #Ignore holos; 0 - Ignore no holos (Full turret), 1 - Ignore turret ring (Casemates), 2 - Ignore all holos (Coax/RWS)
+    #Ignores creating and parenting holos on the specified mode
+    local IgnoreHolos = array(0,0,0,0,0) #Default: array(0,0,0,0,0)
+
+
+    #//SOUND\\#
+    #The sounds of traversing.
+    TRAVERSESOUNDS = array("plats/tram_motor.wav","","","","") #Defaut: array("acf_extra/tankfx/turret5.wav","","","","")
+
+    #The sounds of reloading.
+    RELOADSOUNDS = array("acf_extra/tankfx/gnomefather/reload6.wav","","","","") #Default: array("acf_extra/tankfx/gnomefather/rack.wav","","","","")
+
+    #The time it takes for the sounds of reloading to play (Duration in the right sidebar), might wanna add .100
+    #Yes i know theres a thing for that but it requires the server to have the sound in question
+    RELOADSOUNDTIMES = array(3.800,0,0,0,0) #Default: array(1.55,0,0,0,0)
+
+    #Changes the volume of the lock/unlock sound
+    LOCKERVOLUME = 0.5
+
+
+    #//MISC\\#
+    #Use this to automatically enable parabolic mode for a certain weapon upon switching
+    PARABOLICS = array(0,0,0,0,0) #Default: array(0,0,0,0,0)
+
+    #Use this to set the index at which holograms will start spawn at
+    local Index = 0 #Default: 0
+
+    #Shows useful holograms, use this if you're messing around with offsets
+    local Debug = 0 #Default: 0
+
+    #Parents everything when spawning finishes
+    local Ghosteh = 0 #Default: 0
+
+    #Changes what gun to default to on spawn (Useless)
+    SelectedGun = 1 #Default: 1
+
+
+
+    #/////LIBRARIES\\\\\#
+    #include "renKeyLib"
+    #include "renAmmoSwitcherLib"
+    #include "renHPTurretLib"
+
+
+
+    #/////INITIALIZE VARIABLES\\\\\#
+    #//FREQUENCIES\\#
+    TURRET_FREQUENCY = 75  #Default: 75
+    PARENT_FREQUENCY = 100 #Default: 100
+
+    #Build arrays for the various things
+    if(Gun1:isValid()) {GUNS[1,entity] = Gun1}
+    if(Gun2:isValid()) {GUNS[2,entity] = Gun2}
+    if(Gun3:isValid()) {GUNS[3,entity] = Gun3}
+    if(Gun4:isValid()) {GUNS[4,entity] = Gun4}
+    if(Gun5:isValid()) {GUNS[5,entity] = Gun5}
+
+    if(Ring1:isValid()) {RINGS[1,entity] = Ring1}
+    if(Ring2:isValid()) {RINGS[2,entity] = Ring2}
+    if(Ring3:isValid()) {RINGS[3,entity] = Ring3}
+    if(Ring4:isValid()) {RINGS[4,entity] = Ring4}
+    if(Ring5:isValid()) {RINGS[5,entity] = Ring5}
+
+    if(Parent1:isValid()) {PARENTS[1,entity] = Parent1}
+    if(Parent2:isValid()) {PARENTS[2,entity] = Parent2}
+    if(Parent3:isValid()) {PARENTS[3,entity] = Parent3}
+    if(Parent4:isValid()) {PARENTS[4,entity] = Parent4}
+    if(Parent5:isValid()) {PARENTS[5,entity] = Parent5}
+
+    #//GUN SETTINGS\\#
+    GUNSETTINGS = table()
+
+    #Builds a table of all of the gun settings for ease of use and reading
+    for(G=1,5)
+    {
+        local Traverse = renHPTLFormatTraverse(MinimumTraverses[G,angle],MaximumTraverses[G,angle])
+
+        local GunHolo = 0
+        local RingHolo = 0
+        local IgnoreHolosS = 2
+        local Parent = noentity()
+
+        if(GUNS[G,entity]:isValid())
+        {
+            if(IgnoreHolos[G,number] == 2) {IgnoreHoloS = 2}
+
+            else
+            {
+                if(PARENTS[G,entity]:isValid()) {Parent = PARENTS[G,entity]} else{Parent = entity()}
+
+                if(RINGS[G,entity]:isValid())
+                {
+                    holoCreate(Index,RINGS[G,entity]:toWorld(RINGOFFSETPOS[G,vector]),vec(0),RINGS[G,entity]:toWorld(RINGOFFSETANG[G,angle]):setRoll(0),vec4(0),"plane")
+                    holoParent(Index,Parent)
+                    if(Debug) {holoModel(Index,"models/sprops/misc/origin.mdl") holoScale(Index,vec(1)) holoColor(Index,vec4(255))}
+                    RingHolo = Index
+                    Parents++ #Tallies up all the holograms to determine if we parented everything
+                    Index++
+
+                    IgnoreHolosS = 0
+                }
+
+                else{IgnoreHolosS = 1}
+
+                #Create the holo for the gun
+                holoCreate(Index,GUNS[G,entity]:toWorld(GUNOFFSETPOS[G,vector]+GUNS[G,entity]:massCenterL()),vec(0),GUNS[G,entity]:toWorld(GUNOFFSETANG[G,angle]):setRoll(0),vec4(0),"plane")
+                if(IgnoreHolosS) {holoParent(Index,Parent)} else{holoParent(Index,RingHolo)} #Parent to the chip if we dont have a ring, else parent to the ring
+                if(Debug) {holoModel(Index,"models/sprops/misc/origin.mdl") holoScale(Index,vec(1)) holoColor(Index,vec4(255))}
+                GunHolo = Index
+                Parents++
+                Index++
+            }
+
+            GUNSETTINGS[G,array] = array(
+            Traverse[1,angle],      #Minimum Traverse
+            Traverse[2,angle],      #Maximum Traverse
+            TraverseRates[G,angle], #Traverse Rate
+            Parent,
+            GunHolo,                #Gun Holo Index
+            RingHolo,               #Ring Holo Index
+            IgnoreHolosS            #Ignoring the ring holo or both holos
+            )
+        }
+    }
+
+
+
+    #/////FUNCTIONS\\\\\#
+    #//MSGBUS\\#
+    #Get the bus stuff
+    function void msgBusIn()
+    {
+        if(->MSGBUS)
+        {
+            Ballistic_Solution = MSGBUS["MAIN_GUN_SELECTED_BALLISTIC_SOLUTION",vector]
+            Aimpos       = MSGBUS["AIMPOS",vector]
+            Gunner       = MSGBUS["GUNNER",entity]
+            Velocity     = MSGBUS["VELOCITY",vector]
+            Fire_Command = MSGBUS["FIRE_COMMAND",number]
+            Fire_Plan    = MSGBUS["FIRE_PLAN",array]
+            Self         = MSGBUS["SELF",array]
+            Fight_Time   = MSGBUS["MAIN_GUN_SELECTED_FLIGHT_TIME",number]
+            Target_Weight = MSGBUS["TARGET_TRACK",number]
+        }
+    }
+
+    #Drop off the stuff for the bus
+    function void msgBusOut()
+    {
+        if(->MSGBUS)
+        {
+            MSGBUS["MAIN_GUN_SELECTED",entity] = Current_Gun
+            MSGBUS["WEAPONS_FREE",number]      = Weapons_Free
+            MSGBUS["WEAPONS_OVERRIDE",number]  = Override
+            MSGBUS["MAIN_GUN_IS_PARABOLIC",number] = Main_Gun_Parabolic
+        }
+    }
+
+
+    #//MISC\\#
+    #[Notifies the gunner of a message of your choosing
+    Inputs:
+        Message [STRING] - The message that will be sent to the Gunner
+    ]#
+    function void notifyGunner(Message:string)
+    {
+        Gunner:vehicle():hintDriver("[renHPTurret] "+Message,5.5)
+    }
+
+
+
+    #/////FINALIZATION\\\\\#
+    #//VERSION\\#
+    VERSION = "V1.0.4"
+    setName("renHPTurret "+VERSION)
+
+
+    #//PRESET\\#
+    SelectedGun = 1
+    Current_Gun = GUNS[SelectedGun,entity]
+
+
+    #//MSGBUS\\#
+    MSGBUS["NODE_NAMES",array]:pushString(entity():getName())
+    msgBusIn()
+    msgBusOut()
+
+
+    #//AMMO SWITCHER\\#
+    GUNS:renASLBuild()
+
+
+    #//MISC\\#
+    rangerPersist(1)
+    rangerFilter(Self)
+    runOnLast(1)
+
+
+    #//GHOSTEH MODE\\#
+    #He wanted it
+    if(Ghosteh) {timer("parent",PARENT_FREQUENCY)}
+}
+
+
+
+elseif(inputClk())
+{
+    msgBusIn()
+
+    if(changed(Gunner)&Gunner:isPlayer()) {if(!Ready) {timer("parent",PARENT_FREQUENCY)} SelectedGun:renASLNotify(Gunner)}
+}
+
+
+
+elseif(keyClk(Gunner))
+{
+    if(!Gunner:isTyping())
+    {
+        local Key = keyClkPressed()
+        local Number = Key:toNumber()
+        local Pressed = Gunner:keyPressed(Key)
+
+        switch(Key)
+        {
+            case RenKL_KEYS["SAFTEY",string],
+                Saftey = Gunner:keyPressed(RenKL_KEYS["SAFTEY",string])
+            break
+
+            case RenKL_KEYS["TOGGLE_TURRET",string],
+                if(Pressed)
+                {
+                    Weapons_Free = !Weapons_Free
+
+                    Gun1Fire=Gun2Fire=Gun3Fire=Gun4Fire=Gun5Fire = 0
+
+                    if(Weapons_Free)
+                    {
+                        timer("turret",TURRET_FREQUENCY) soundPlay("locker",0.7,"buttons/lever8.wav") soundVolume("locker",LOCKERVOLUME)
+                        for(S=1,5) {if(GUNS[S,entity]:isValid()&TRAVERSESOUNDS[S,string]) {GUNS[S,entity]:soundPlay(S,0,TRAVERSESOUNDS[S,string]) soundVolume(S,0)}}
+                    }
+
+                    else{stoptimer("turret") soundPlay("locker",1,"vehicles/atv_ammo_close.wav") soundVolume("locker",LOCKERVOLUME) for(S=1,5) {soundStop(S)}}
+                    
+                    msgBusOut()
+                }
+            break
+
+            case RenKL_KEYS["NEXT_WEAPON",string],
+                if(Saftey)
+                {
+                    Reload = Pressed
+                }
+
+                elseif(Pressed)
+                {
+                    if(GUNS[SelectedGun+1,entity]:isValid()) {SelectedGun = SelectedGun+1} else {SelectedGun = 1}
+
+                    Current_Gun = GUNS[SelectedGun,entity]
+
+                    Main_Gun_Parabolic = PARABOLICS[SelectedGun,number]
+
+                    notifyGunner("Current gun: "+Current_Gun:acfCaliber()+"mm "+Current_Gun:acfType()+".")
+
+                    SelectedGun:renASLNotify(Gunner)
+                }
+            break
+
+            default,
+                if(inrange(Number,1,9)&Pressed)
+                {
+                    renASLSelect(SelectedGun,Number,Gunner)
+                }
+            break
+        }
+    }
+}
+
+
+
+elseif(clk("turret"))
+{
+    timer("turret",TURRET_FREQUENCY)
+
+    TargetPos = Ballistic_Solution+Aimpos
+
+    if(Ready)
+    {
+        for(G=1,GUNS:count())
+        {
+            local CurSettings = GUNSETTINGS[G,array]
+
+            #function angle entity:renTuHoloAimGun(Min:angle,Max:angle,FloatingAngle:angle,DegreesPerSecond:angle,Aimpos:vector,Timestep:number,GunIndex:number,RingIndex:number,IgnoreHoloM:number)
+            #function angle entity:renHPTLAim(Min:angle,Max:angle,FloatingAngle:angle,DegreesPerSecond:angle,Aimpos:vector,Timestep:number,Parent:entity,GunIndex:number,RingIndex:number,IgnoreHoloM:number)
+            FloatingAngles[G,angle] = GUNS[G,entity]:renHPTLAim(
+                CurSettings[1,angle],    #Min Traverse
+                CurSettings[2,angle],    #Max Traverse
+                FloatingAngles[G,angle], #
+                CurSettings[3,angle],    #Traverse Rate
+                TargetPos,               #Aimpos
+                TURRET_FREQUENCY/1000,   #Timestep
+                CurSettings[4,entity],   #Parent/Relative
+                CurSettings[5,number],   #Gun Holo Index
+                CurSettings[6,number],   #Ring Holo Index
+                CurSettings[7,number]    #Ignore Holo(s)
+            )
+            
+            GUNS[G,entity]:renHPTLTraverseSound(G,TargetPos)
+        }
+    }
+
+    if(Gunner:keyAttack1())
+    {
+        local FirePass = Current_Gun:renHPTLLogicalInterlock(TargetPos,Saftey)
+
+        Gun1Fire = FirePass & (SelectedGun == 1)
+        Gun2Fire = FirePass & (SelectedGun == 2)
+        Gun3Fire = FirePass & (SelectedGun == 3)
+        Gun4Fire = FirePass & (SelectedGun == 4)
+        Gun5Fire = FirePass & (SelectedGun == 5)
+    }
+
+    else
+    {
+        Gun1Fire=Gun2Fire=Gun3Fire=Gun4Fire=Gun5Fire = 0
+    }
+    
+    if(changed(Current_Gun:acfAmmoCount())&(!Current_Gun:acfReady()))
+    {
+        if(RELOADSOUNDS[SelectedGun,string]:length()&RELOADSOUNDTIMES[SelectedGun,number])
+        {local Time = Current_Gun:renHPTLReloadSoundTime(RELOADSOUNDTIMES[SelectedGun,number]) if(Time != -1) {timer("reload"+SelectedGun,Time)}}
+    }
+
+    msgBusOut()
+}
+
+
+
+elseif(clk("parent"))
+{
+    if(!Ready)
+    {
+        timer("parent",PARENT_FREQUENCY)
+
+        for(P=1,5)
+        {
+            local CurSettings = GUNSETTINGS[P,array]
+            local CurHoloIgnore = CurSettings[7,number]
+
+            if(CurHoloIgnore != 2)
+            {
+                if(!RingReadies[P,number]&(CurHoloIgnore != 1))
+                {
+                    #entity:renHTPLParentHolo(Index:number,OffsetPos:vector,OffsetAng:angle,IgnoreAng:number,IgnorePos:number)
+                    RingReadies[P,number] = RINGS[P,entity]:renHTPLParentHolo(CurSettings[6,number],RINGOFFSETPOS[P,vector],RINGOFFSETANG[P,angle],1,0)
+                    
+                    if(RingReadies[P,number]) {CurParents++} 
+                }
+
+                if(!GunReadies[P,number])
+                {
+                    GunReadies[P,number] = GUNS[P,entity]:renHTPLParentHolo(CurSettings[5,number],GUNOFFSETPOS[P,vector]+GUNS[P,entity]:massCenterL(),GUNOFFSETANG[P,angle],1,0)
+
+                    if(GunReadies[P,number]) {CurParents++}
+                }
+            }
+        }
+    }
+
+    if(CurParents >= Parents) {Ready++ stoptimer("parent") notifyGunner("Finished parenting turret(s)")}
+}
+
+elseif(clk("reload1")) {Gun1:soundPlay("reload1",RELOADSOUNDTIMES[1,number],RELOADSOUNDS[1,string])}
+elseif(clk("reload2")) {Gun2:soundPlay("reload2",RELOADSOUNDTIMES[2,number],RELOADSOUNDS[2,string])}
+elseif(clk("reload3")) {Gun3:soundPlay("reload3",RELOADSOUNDTIMES[3,number],RELOADSOUNDS[3,string])}
+elseif(clk("reload4")) {Gun4:soundPlay("reload4",RELOADSOUNDTIMES[4,number],RELOADSOUNDS[4,string])}
+elseif(clk("reload5")) {Gun5:soundPlay("reload5",RELOADSOUNDTIMES[5,number],RELOADSOUNDS[5,string])}
+
+
+
+if(last())
+{
+    if(Ready) {for(D=1,5){GUNS[D,entity]:deparent() RINGS[D,entity]:deparent()}}
+}

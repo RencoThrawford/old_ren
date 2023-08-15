@@ -1,0 +1,311 @@
+@name Xoom (2021) Holos
+@inputs [MSGBUS]:table #Normal Inputs
+@inputs [TurretBase]:entity
+@inputs [DoorF DoorR]:entity [Carriage]:entity
+@inputs [CIWSBase CIWSGun]:entity [FollowerBase FollowerRadar]:entity
+@inputs [CIWSGunShotsLeft CIWSMissileShotsLeft]:number
+@outputs [CIWSGunFire CIWSGunReload CIWSMissileFire CIWSMissileReload]:number [CIWSMissileTargetPos]:vector [CIWSMissileTargetEnt]:entity
+@persist [MAXRATE DEBUG]:number #User Settings
+@persist [BALLISTICS_FREQUENCY ANIM_FREQUENCY TURRETS_FREQUENCY MISC_FREQUENCY]:number [PARENT_TICK]:number #Frequencies
+@persist [Gunner]:entity [Aimpos Velocity Counter_Target Counter_Speed]:vector [Self Radar_Data]:array #MSGBUS Inputs
+@persist [REFDOORF REFDOORR REFCARRIAGE]:number [REFCIWSBASE REFCIWSGUN REFCIWSELE]:number [REFFOLLOWERBASE REFFOLLOWERRADAR]:number [REFTABLE]:number [ORIGINDOORF ORIGINDOORR ORIGINCARRIAGE]:vector [CIWSSettings FollowerSettings]:array #Global Variables
+@outputs [CIWSStowed Deploying Ready CIWSRange AnimRate AnimStep CIWSLastEngagementTime]:number [TargetSpeed CIWSTarget CIWSSolution FollowerTarget]:vector [CIWSFloating FollowerFloating]:angle [CIWSTable]:array #"Runtime" Variables
+@trigger [MSGBUS]
+runOnKeys(Gunner,1)
+
+if(duped()|dupefinished()) {reset()}
+
+if(first())
+{
+    local Index = 0
+    MAXRATE = 0.25
+    DEBUG = 0
+    local CIWSMinimumTraverse = ang(-10,-180,0)
+    local CIWSMaximumTraverse = ang(85,180,0)
+    local CIWSTraverseRate = ang(45,50,0)
+    local FollowerMinimumTraverse = ang(-89,-180,0)
+    local FollowerMaximumTraverse = ang(89,180,0)
+    local FollowerTraverseRate = ang(50,60,0)
+    
+    #include "renFCSLib"
+    #include "renHPTurretLib"
+    #include "renKeyLib"
+    
+    #Frequency for ballistics (Lead/drift comp)
+    BALLISTICS_FREQUENCY = 50 #Default: 50
+    #Frequency for moving carriage+doors
+    ANIM_FREQUENCY = 50 #Default: 50
+    #Frequency for updating CIWS & Follower turrets
+    TURRETS_FREQUENCY = 75 #Default: 75
+    #Frequency for reloading and stuff
+    MISC_FREQUENCY = 100 #Default: 100
+    #Tick for parenting everything
+    PARENT_TICK = 100 #Default: 100
+    
+    CIWSStowed = 1
+    
+    if(->TurretBase)
+    {
+        local AntOrigin1 = vec(0,0,13)
+        local AntNormal1 = vec(0,0,1)
+        local AntOrigin2 = vec(-33,0,0) #vec(-18,0,0)
+        local AntNormal2 = vec(-1,0,1) #vec(-1,0,0)
+        
+        #Left Antenna
+        holoCreate(Index,TurretBase:toWorld(vec(20.8,0,-13.001)+vec(-130.034409,45.247078,34.907494)),vec(1),TurretBase:toWorld(ang(0)),vec4(255),"models/props_survival/jammer/jammer.mdl")
+        holoParent(Index,TurretBase)
+        holoClipEnabled(Index,1,1)
+        holoClipEnabled(Index,2,1)
+        holoClip(Index,1,AntOrigin1,AntNormal1,0)
+        holoClip(Index,2,AntOrigin2,AntNormal2,0)
+        Index++
+    
+        #Right Antenna
+        holoCreate(Index,TurretBase:toWorld(vec(20.8,0,-13.001)+vec(-130.034409,-45.255844,34.907494)),vec(1),TurretBase:toWorld(ang(0)),vec4(255),"models/props_survival/jammer/jammer.mdl")
+        holoParent(Index,TurretBase)
+        holoClipEnabled(Index,1,1)
+        holoClipEnabled(Index,2,1)
+        holoClip(Index,1,AntOrigin1,AntNormal1,0)
+        holoClip(Index,2,AntOrigin2,AntNormal2,0)
+        Index++
+        local LastDetailIndex = Index
+
+        if(->DoorF) {holoCreate(Index,DoorF:toWorld(vec(0,7.499512,0.249939)),vec(0),TurretBase:toWorld(ang(0)),vec4(0),"plane") holoParent(Index,TurretBase) REFDOORF = Index ORIGINDOORF = TurretBase:toLocal(holoEntity(Index):pos()) Index++}
+        if(->DoorR) {holoCreate(Index,DoorR:toWorld(vec(0,-6,0.249939)),vec(0),TurretBase:toWorld(ang(0)),vec4(0),"plane") holoParent(Index,TurretBase) REFDOORR = Index ORIGINDOORR = TurretBase:toLocal(holoEntity(Index):pos()) Index++}
+        if(->Carriage) {holoCreate(Index,Carriage:toWorld(vec(0)),vec(0),Carriage:toWorld(ang(0)),vec4(0),"plane") holoParent(Index,TurretBase) REFCARRIAGE = Index ORIGINCARRIAGE = TurretBase:toLocal(holoEntity(Index):pos()) Index++}
+
+        if(->CIWSBase) {holoCreate(Index,CIWSBase:toWorld(vec(0)),vec(0),CIWSBase:toWorld(ang(0)),vec4(0),"plane") holoParent(Index,REFCARRIAGE) REFCIWSBASE = Index Index++}
+        if(->CIWSGun)
+        {
+            holoCreate(Index,CIWSGun:massCenter(),vec(0),CIWSGun:toWorld(ang(0)),vec4(0),"plane") holoParent(Index,REFCIWSBASE) REFCIWSGUN = Index Index++
+            holoCreate(Index,CIWSGun:massCenter(),vec(0),CIWSGun:toWorld(ang(0)),vec4(0),"plane") holoParent(Index,CIWSGun) REFCIWSELE = Index Index++
+        }
+
+        if(->FollowerBase) {holoCreate(Index,FollowerBase:toWorld(vec(0)),vec(0),FollowerBase:toWorld(ang(0)),vec4(0),"plane") holoParent(Index,TurretBase) REFFOLLOWERBASE = Index Index++}
+        if(->FollowerRadar) {holoCreate(Index,FollowerRadar:toWorld(vec(0)),vec(0),FollowerRadar:toWorld(ang(0)),vec4(0),"plane") holoParent(Index,REFFOLLOWERBASE) REFFOLLOWERRADAR = Index Index++}
+        
+        if(DEBUG) {for(H=LastDetailIndex,Index-1) {holoScale(H,vec(1)) holoColor(H,vec4(255)) holoModel(H,"models/sprops/misc/origin.mdl")}}
+    }
+    
+    function void ownerNotify(Message:string){hint("[Xoom (2021) Holos] "+Message,5.5)}
+
+    function void msgBusIn()
+    {
+        if(->MSGBUS)
+        {
+            Gunner = MSGBUS["GUNNER",entity]
+            Aimpos = MSGBUS["AIMPOS",vector]
+            Velocity = MSGBUS["VELOCITY",vector]
+            Self = MSGBUS["SELF",array]
+            Counter_Target = MSGBUS["COUNTER_TARGET",vector]
+            Counter_Speed = MSGBUS["COUNTER_SPEED",vector]
+            Radar_Data = MSGBUS["RADAR_DATA",array]
+        }
+    }
+
+    function void entity:soundParent(Parent:entity)
+    {
+        This:parentTo(Parent)
+        This:soundPlay("parent",1.7,"ambient/energy/weld"+randint(1,2)+".wav")
+    }
+    
+    function void entity:soundClunk()
+    {
+        This:soundPlay("clunk",2.5,"physics/metal/metal_box_impact_soft"+randint(1,3)+".wav")
+    }
+    
+    function void entity:soundSqueak()
+    {
+        This:soundPlay("squeak",2.1,"buttons/lever"+randint(1,8)+".wav")
+    }
+
+    local CIWSTraverses = renHPTLFormatTraverse(CIWSMinimumTraverse,CIWSMaximumTraverse)
+    CIWSSettings = array(CIWSTraverses[1,angle],CIWSTraverses[2,angle],CIWSTraverseRate,holoEntity(REFCARRIAGE),REFCIWSGUN,REFCIWSBASE,0)
+    
+    local FollowerTraverses = renHPTLFormatTraverse(FollowerMinimumTraverse,FollowerMaximumTraverse)
+    FollowerSettings = array(FollowerTraverses[1,angle],FollowerTraverses[2,angle],FollowerTraverseRate,TurretBase,REFFOLLOWERRADAR,REFFOLLOWERBASE,0)
+    
+    REFTABLE = Index
+    CIWSTable = renFCSLTableCreate(CIWSGun,REFTABLE)
+    
+    CIWSGun:soundPlay("ciws",0,"acf_extra/tankfx/turret5.wav") soundVolume("ciws",0)
+    FollowerRadar:soundPlay("follower",0,"acf_extra/tankfx/turret5.wav") soundVolume("follower",0)
+}
+
+elseif(inputClk())
+{
+    msgBusIn()
+    
+    if(changed(Gunner)&Gunner:isPlayer()&(!Ready)) {timer("parent",PARENT_TICK) timer("ballistics",BALLISTICS_FREQUENCY) timer("turrets",TURRETS_FREQUENCY) timer("misc",MISC_FREQUENCY)}
+}
+
+elseif(keyClk(Gunner))
+{
+    if((!Gunner:isTyping())&Gunner:vehicle())
+    {
+        local Key = keyClkPressed()
+        local Pressed = Gunner:keyPressed(Key)
+
+        switch(Key)
+        {
+            case RenKL_KEYS["AUX_1",string],
+                if(Pressed)
+                {
+                    Deploying = !Deploying
+                    AnimRate = (Deploying ? MAXRATE : -MAXRATE)
+                    if(CIWSStowed) {timer("anim",ANIM_FREQUENCY)} else{CIWSStowed = -1}
+                }
+            break
+        }
+    }
+}
+
+elseif(clk("parent"))
+{
+    if(DEBUG)
+    {
+        ownerNotify("Debug mode enabled!")
+        Ready++
+    }
+    else
+    {
+        DoorF:soundParent(holoEntity(REFDOORF))
+        DoorR:soundParent(holoEntity(REFDOORR))
+        Carriage:soundParent(holoEntity(REFCARRIAGE))
+        CIWSBase:soundParent(holoEntity(REFCIWSBASE))
+        CIWSGun:soundParent(holoEntity(REFCIWSGUN))
+        FollowerBase:soundParent(holoEntity(REFFOLLOWERBASE))
+        FollowerRadar:soundParent(holoEntity(REFFOLLOWERRADAR))
+        ownerNotify("Finished parenting!")
+        Ready++
+    }
+}
+
+elseif(clk("ballistics"))
+{
+    timer("ballistics",BALLISTICS_FREQUENCY)
+    holoAng(REFCIWSELE,ang(0,CIWSGun:angles():yaw(),0))
+    
+    CIWSRange = ((CIWSGun:massCenter() - Counter_Target):setZ(0):length())/RenFCSL_CONVERT
+    local AdjustedRange = CIWSRange-abs(holoEntity(REFCIWSELE):elevation(Counter_Target)/RenFCSL_CONVERT)
+    
+    if(changed(Counter_Target)) {TargetSpeed = $Counter_Target}
+    local Lookup = renFCSLTableInterpolate(CIWSTable,AdjustedRange)
+    local GunDrift = (Velocity * Lookup[2])
+    local LeadDrift = ((TargetSpeed*150) * Lookup[2])
+    local Opposite = renFCSLFindOpposite(AdjustedRange,Lookup[1])
+
+    CIWSSolution = vec(0,0,Opposite) - ((GunDrift-LeadDrift)*((TURRETS_FREQUENCY/1000)+tickInterval()))
+}
+
+elseif(clk("turrets"))
+{
+    timer("turrets",TURRETS_FREQUENCY)
+    #We have a targe to shoot at, aim the ciws with solution and point the follower at the target
+    if(Counter_Target)
+    {
+        if(CIWSStowed == 0) {CIWSTarget = Counter_Target+CIWSSolution} else{CIWSTarget = Carriage:pos()+(Carriage:forward()*1000)}
+        FollowerTarget = Counter_Target
+    }
+
+    #No target to shoot at, but there are missile detected, track the average of all of their positions
+    elseif(Radar_Data:count())
+    {
+        local Average = vec(0)
+        foreach(K,M:entity = Radar_Data) {Average += M:massCenter()}
+        Average = Average/Radar_Data:count()
+        
+        if(CIWSStowed == 0) {CIWSTarget = Average} else{CIWSTarget = Carriage:pos()+(Carriage:forward()*1000)}
+        FollowerTarget = Average
+    }
+
+    #Nothing around, aim the CIWS forward relative to the turret and have the follower aim at where the gunner is aiming
+    else
+    {
+        if(CIWSStowed == 0) {CIWSTarget = TurretBase:pos()+((TurretBase:forward()+(TurretBase:up()/2.5))*1000)} else{CIWSTarget = Carriage:pos()+(Carriage:forward()*1000)}
+        FollowerTarget = Aimpos
+    }
+
+    #Actual turret code
+    if(Ready)
+    {
+        FollowerFloating = FollowerRadar:renHPTLAim(
+            FollowerSettings[1,angle],
+            FollowerSettings[2,angle],
+            FollowerFloating,
+            FollowerSettings[3,angle],
+            FollowerTarget,
+            TURRETS_FREQUENCY/1000,
+            FollowerSettings[4,entity],
+            FollowerSettings[5,number],
+            FollowerSettings[6,number],
+            FollowerSettings[7,number]
+        )
+        FollowerRadar:renHPTLTraverseSound("follower",FollowerTarget)
+
+        if(inrange(CIWSStowed,-1,0))
+        {
+            CIWSFloating = CIWSGun:renHPTLAim(
+                CIWSSettings[1,angle],
+                CIWSSettings[2,angle],
+                CIWSFloating,
+                CIWSSettings[3,angle],
+                CIWSTarget,
+                TURRETS_FREQUENCY/1000,
+                CIWSSettings[4,entity],
+                CIWSSettings[5,number],
+                CIWSSettings[6,number],
+                CIWSSettings[7,number]
+            )
+
+            CIWSGun:renHPTLTraverseSound("ciws",CIWSTarget)
+            if(CIWSStowed == -1) {if(inrange(Carriage:toLocal(holoEntity(REFCIWSGUN):angles()),ang(-1),ang(1))) {CIWSStowed = 1 timer("anim",ANIM_FREQUENCY) soundVolume("ciws",0)}}
+        }
+        
+        Counter_Dist = Counter_Target:distance(entity():pos())
+        CIWSGunFire = (CIWSStowed==0)&(Counter_Target:length()>0)&CIWSGun:renHPTLLogicalInterlock(CIWSTarget,0)&inrange(Counter_Dist,150,15000)
+        CIWSMissileFire = (CIWSStowed==0)&(Counter_Target:length()>0)&CIWSGun:renHPTLLogicalInterlock(CIWSTarget,0)&inrange(Counter_Dist,500,8000)
+    }
+}
+
+elseif(clk("anim"))
+{
+    if((AnimStep == 0)&(AnimRate>0)) {Carriage:soundSqueak()}
+    if(AnimStep == 27) {if(AnimRate>0) {soundStop("move")} elseif(AnimRate<0) {Carriage:soundPlay("move",0,"acf_extra/tankfx/servo_1.wav") soundVolume("move",0.8) soundPitch("move",80)}}
+    AnimStep = clamp(AnimStep+AnimRate,0,27)
+    if(changed(AnimStep)) {timer("anim",ANIM_FREQUENCY)} else{stoptimer("anim") soundStop("move") Carriage:soundClunk() if(AnimRate>0) {CIWSStowed = 0}}
+    if(AnimStep == 5) {if(AnimRate>0) {Carriage:soundPlay("move",0,"acf_extra/tankfx/servo_1.wav") soundVolume("move",0.8) soundPitch("move",80)} elseif(AnimRate<0) {soundStop("move") Carriage:soundClunk() Carriage:soundSqueak()}}
+
+    if(Ready)
+    {
+        local DoorAng = ang(clamp(AnimStep,0,4)*22.5,0,0)
+        local DoorPos = vec(0,0,-clamp(AnimStep-4,0,15.5))
+        local CarriagePos = vec(0,0,clamp(AnimStep-5,0,22))
+
+        holoAng(REFDOORF,TurretBase:toWorld(DoorAng))
+        holoPos(REFDOORF,TurretBase:toWorld(ORIGINDOORF+DoorPos))
+        holoAng(REFDOORR,TurretBase:toWorld(-DoorAng))
+        holoPos(REFDOORR,TurretBase:toWorld(ORIGINDOORR+DoorPos))
+
+        holoPos(REFCARRIAGE,TurretBase:toWorld(ORIGINCARRIAGE+CarriagePos))
+    }
+}
+
+elseif(clk("misc"))
+{
+    timer("misc",MISC_FREQUENCY)
+    CIWSMissileTargetPos = Counter_Target
+    
+    #Missile reloading
+    if(changed(CIWSMissileShotsLeft))
+    {
+        if(CIWSMissileShotsLeft == 0) {CIWSMissileReload = 1}
+        elseif(CIWSMissileShotsLeft == 4) {CIWSMissileReload = 0}
+    }
+    
+    #Gun reloading; only reloads if we dont have a target and 10 seconds have elapsed
+    if(changed(Counter_Target)) {CIWSGunReload = 0 CIWSLastEngagementTime = curtime()}
+    elseif((curtime()-CIWSLastEngagementTime)>10) {CIWSGunReload = (CIWSGunShotsLeft < 100)}
+    
+    if(changed(CIWSGun:acfRoundType())|changed(CIWSGun)) {CIWSTable = renFCSLTableCreate(CIWSGun,REFTABLE)}
+}

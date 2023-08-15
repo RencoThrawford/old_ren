@@ -1,0 +1,124 @@
+@name renHoloCamoLib
+@persist [RenHCL_Material]:string [RenHCL_COLOURS]:table
+@persist [RenHCL_VERSION]:string
+@autoupdate on
+#[
+E2 Library By:
+    Renco - Everything
+
+!!!!!
+RE-DISTRIBUTE I GUESS
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+Simple library that allows you to easily change the color/material of a group of holograms and/or the E2 to default camo colours
+
+
+
+//////////VERSION LOG\\\\\\\\\
+V0.0.0 (10-23-20) - Initial Devloplment
+V1.0.0 (10-23-20) - Functionally Complete
+V1.0.1 (10-28-20) -
+    [ADDED] Version string
+V1.0.2 (10-29-20) -
+    [CHANGED] Minor refactor
+      [ADDED] Added fallback material inputs to the functions when we're using a color that does do materials
+    [CHANGED] Using This: instead of an input for holo camo
+V1.0.3 (12-25-20) -
+    [FIXED] Fixed undocumented issues
+V1.0.4 (12-26-20) -
+    [ADDED] Added default textures
+
+
+
+//////////TO-DO\\\\\\\\\\
+
+/////DONE\\\\\#
+]#
+
+
+#Your default material of choice here
+RenHCL_MATERIAL = "sprops/textures/sprops_metal6"
+
+#Determines which colors wont have their materials changed
+RenHCL_NOMAT = table()
+RenHCL_NOMAT["green",number] = 1
+RenHCL_NOMAT["purple",number] = 1
+
+#Table of colors, you can use this directly if you wish
+RenHCL_COLOURS = table()
+RenHCL_COLOURS["red",vector]    = vec(255,0,0)
+RenHCL_COLOURS["green",vector]  = vec(0,255,0)
+RenHCL_COLOURS["blue",vector]   = vec(0,0,255)
+RenHCL_COLOURS["yellow",vector] = vec(255,255,0)
+RenHCL_COLOURS["teal",vector]   = vec(0,255,255)
+RenHCL_COLOURS["purple",vector] = vec(255,0,255)
+
+#It's the version!
+RenHCL_VERSION = "V1.0.4"
+
+
+
+#//////////FUNCTIONS\\\\\\\\\\#
+#[This function changes the colour and or material of an array of holo indexes to the selected Color
+This function will not set the material of green and purple colors
+For use with a camo E2 that utilizes getConnected()
+Inputs:
+             [ARRAY]  - An array of hologram indexes you wish to have coloured and materialed
+    Colour   [STRING] - Set this to the color you wish to set the color of the holograms to
+    Material [STRING] - Fallback material if the color doesnt do materials
+]#
+function void array:renHCLHolo(Colour:string,Material:string)
+{
+    #Get the colour we'll be using
+    local Lower = Colour:lower()
+    local Color = RenHCL_COLOURS[Lower,vector]
+
+    #Overides material input if the color does do materials
+    local Mat = Material
+    if(!RenHCL_NOMAT[Lower,number]) {Mat = RenHCL_MATERIAL}
+
+    #Set the color and materials of each hologram
+    for(H=1,This:count())
+    {
+        holoColor(This[H,number],Color)
+        holoMaterial(This[H,number],Mat)
+    }
+}
+
+#[This function changes the color and or material of the host E2
+This function will not set the material of the green and purple colours
+For use with a camo E2 that utilizes getConnected()
+Inputs:
+    Colour   [STRING] - Set this to the color you wish the color you want the E2 to be set to
+    Material [STRING] - Fallback material if the color doesnt do materials
+]#
+function void renHCLE2(Colour:string,Material:string)
+{
+    #Incase somone types in ALL CAPS
+    local Lower = Colour:lower()
+
+    #Overides material input if the color does do materials
+    local Mat = Material
+    if(!RenHCL_NOMAT[Lower,number]) {Mat = RenHCL_MATERIAL}
+
+    #Set the color and material of the E2
+    entity():setColor(RenHCL_COLOURS[Lower,vector])
+    entity():setMaterial(Mat)
+}
+
+#[This function combines the function of the previous 2 functions into one, because?
+This function will not set the material of the green and purple colours
+For use with a camo E2 that utilizes getConnected()
+Inputs:
+             [ARRAY]  - An array of hologram indexes you wish to have coloured and materialed
+    Colour   [STRING] - Set this to the color you wish to set the color of the holograms to
+    Material [STRING] - Fallback material if the color doesnt do materials
+]#
+function void array:renHCLHoloE2(Colour:string,Material:string)
+{
+    This:renHCLHolo(Colour,Material)
+    renHCLE2(Colour,Material)
+}

@@ -1,0 +1,50 @@
+@name Panthur Holos
+@inputs [LeftWheels RightWheels]:array
+@persist [CHECK_FREQUENCY]:number
+@persist [LEFTREFS RIGHTREFS]:array
+@trigger none
+
+#By: Renco
+if(duped()|dupefinished()) {reset()}
+
+if(first())
+{
+    local Index = 0
+    local Scale = vec(1.21,0.45,1.21)
+    
+    CHECK_FREQUENCY = 1000
+    
+    function number even(Number:number) {return (Number%2)==0}
+    
+    foreach(L,LW:entity = LeftWheels)
+    {
+        holoCreate(Index,LW:toWorld(vec(0,0.5,0)),Scale,LW:toWorld(ang(0)),LW:getColor4(),"models/sprops/trans/miscwheels/tank30.mdl")
+        holoParent(Index,LW)
+        holoSkin(Index,even(L))
+        holoBodygroup(Index,1,2)
+        LEFTREFS:pushNumber(Index)
+        Index++
+    }
+    foreach(R,RW:entity = RightWheels)
+    {
+        holoCreate(Index,RW:toWorld(vec(0,-0.5,0)),Scale,RW:toWorld(ang(0,180,0)),RW:getColor4(),"models/sprops/trans/miscwheels/tank30.mdl")
+        holoParent(Index,RW)
+        holoSkin(Index,even(R))
+        holoBodygroup(Index,1,2)
+        RIGHTREFS:pushNumber(Index)
+        Index++
+    }
+    
+    if((->LeftWheels)&(->RightWheels)) {timer("check",CHECK_FREQUENCY)}
+}
+
+elseif(clk("check"))
+{
+    timer("check",CHECK_FREQUENCY)
+    
+    if(changed(LeftWheels[1,entity]:getColor4()))
+    {
+        foreach(L,LH:number = LEFTREFS) {holoColor(LH,holoEntity(LH):parent():getColor4())}
+        foreach(R,RH:number = RIGHTREFS) {holoColor(RH,holoEntity(RH):parent():getColor4())}
+    }
+}

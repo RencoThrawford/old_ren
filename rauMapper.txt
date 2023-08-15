@@ -1,0 +1,275 @@
+@name rauMapper
+@inputs [EGP]:wirelink
+@persist [LOAD_FREQUENCY]:number
+@persist [VERSION]:string [MANUAL]:table
+@trigger none
+#[
+E2 By:
+    Renco - Everything
+
+!!!!!
+REALLY DO-NOT RE-DISTRIBUTE!
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+This E2 generates waypoints for my pathfinding algorithm
+
+
+
+//////////VERSION LOG\\\\\\\\\\
+V0.0.0 (10-29-20) - Initial Development
+V0.0.1 (10-29-20) -
+    [ADDED] notifyOwner(string); Hints to the owner
+    [ADDED] tellOwner(string); Prints to the owner's chat
+    [ADDED] bugOwner(string); Prints to the owner's console
+    [ADDED] Basic chat commands; man, hel, ver, res, loa, sav
+    [ADDED] Key Framework
+V0.0.2 (11-10-20) -
+    [ADDED] set command; changes the current point set between GRN, NAV, AIR
+V0.0.3 (12-10-20)
+    [ADDED] new commmand; Creates a new map file in memory
+    [ADDED] clr command; Clears the map file in memory
+    [ADDED] Implemented loading and saving functionality from rauPointsLib
+    [FIXED] Fixed potential issue with man command
+
+
+
+//////////TO-DO\\\\\\\\\\
+
+/////DONE\\\\\
+]#
+
+
+#//////////INITIALIZATION\\\\\\\\\\#
+#Reset the E2 if we have been duped or the dupe has finished spawning
+if(duped()|dupefinished()) {reset()}
+
+#The beginning
+if(first())
+{
+
+    LOAD_FREQUENCY = 50
+
+    #/////LIBRARIES\\\\\#
+    #include "rauPointsLib"
+    #include "renKeyLib"
+
+
+
+    #/////VARIABLES\\\\\#
+    MANUAL = table()
+    MANUAL["man",string] = "Prints out a description of the provided command. <COMMAND>"
+    MANUAL["hel",string] = "Prints out a list of available commands."
+    MANUAL["ver",string] = "Prints out the version into chat, aswell as credits and a hash into console."
+    MANUAL["res",string] = "Resets the E2."
+    MANUAL["new",string] = "Starts a new map file."
+    MANUAL["clr",string] = "Clears the current map file from memory."
+    MANUAL["loa",string] = "Loads the file for the current map."
+    MANUAL["sav",string] = "Saves the file for the current map."
+    MANUAL["set",string] = "Changes the current path set (GRN,NAV,AIR). <PATH SET>"
+
+
+
+    #/////FUNCTIONS\\\\\#
+    #//MISC\\#
+    #[Notifies the owner via a hint with a message of your choosing
+    Inputs:
+        Message [STRING] - The message that will be hinted
+        ]#
+        function void notifyOwner(Message:string)
+        {
+            hint("[rauMapper] "+Message,5.5)
+        }
+
+    #[Prints into the owner's chat the message of your choosing
+    Inputs:
+        Message [STRING] - The message that will be printed
+        ]#
+        function void tellOwner(Message:string)
+        {
+            print("[rauMapper] "+Message)
+        }
+
+    #[Prints into the owner's console the message of your choosing
+    Inputs:
+        Message [STRING]
+        ]#
+        function void bugOwner(Message:string)
+        {
+            print(_HUD_PRINTCONSOLE,"[rauMapper] "+Message)
+        }
+
+
+
+    #/////FINALIZATION\\\\\#
+    #//MISC\\#
+    runOnKeys(owner(),1)
+    runOnChat(1)
+
+    #//VERSION\\#
+    VERSION = "V0.0.2"
+    setName("rauMapper "+VERSION)
+}
+
+
+
+#//////////KEYS\\\\\\\\\\#
+elseif(keyClk(owner()))
+{
+    if(!owner():isTyping()&!owner():vehicle())
+    {
+        local Key = keyClkPressed()
+        local Pressed = owner():keyPressed(Key)
+
+        switch(Key)
+        {
+            case RenKL_KEYS["SELECT",string],
+
+            break
+
+            case RenKL_KEYS["SPECIAL",string],
+
+            break
+        }
+    }
+}
+
+
+
+#//////////CHAT COMMANDS\\\\\\\\\\#
+elseif(chatClk(owner()))
+{
+    local Said = owner():lastSaid():lower()
+    local Split = Said:explode(" ")
+    local Token = Split:string(1)
+    local Command = Split:string(2)
+    local Arg1 = Split:string(3)
+
+    if(Token == "map")
+    {
+        switch(Command)
+        {
+            #Manual; provides a description of the provided command
+            case "manual",
+            case "man",
+            if(MANUAL:exists(Arg1)) {tellOwner(Arg1+": "+MANUAL[Arg1,string])}
+            else{tellOwner("Command "+Arg1+" not found, please use hel for a list of available commands.")}
+            break
+
+            #Help; provides a list of usable commands
+            case "help",
+            case "hel",
+            tellOwner("Commands: man, hel, ver, res, new, clr, loa, sav, set.")
+            break
+
+            #Version; Prints out the version, credits, and a hash
+            case "version",
+            case "ver",
+            tellOwner(VERSION)
+            bugOwner(VERSION+" By: Renco; "+hashNoComments()+".")
+            break
+
+            #Reset; resets the E2
+            case "reset",
+            case "res",
+            notifyOwner("Resetting.")
+            reset()
+            break
+
+            case "new",
+            if(RauPL_MapLoaded==1)
+            {
+                notifyOwner("Map already loaded, use clr to clear the map.")
+            }
+
+            else
+            {
+                rauPLNew()
+
+                notifyOwner("Creating a new map.")
+            }
+            break
+
+            case "clear",
+            case "cle",
+            case "clr",
+            if(RauPL_MapLoaded==1)
+            {
+                rauPLClear()
+
+                notifyOwner("Clearing internal map file.")
+            }
+
+            else
+            {
+                notifyOwner("No map loaded to clear!")
+            }
+            break
+
+            #Load; loads the file for the current map
+            case "load",
+            case "loa",
+            if(RauPL_MapLoaded==1)
+            {
+                notifyOwner("Map already loaded, use clr to clear the map.")
+            }
+
+            else
+            {
+                rauPLLoad()
+
+                timer("load",LOAD_FREQUENCY)
+
+                notifyOwner("Loading map.")
+            }
+            break
+
+            #Save; saves the file for the current map
+            case "save",
+            case "sav",
+            if(RauPL_MapLoaded==1)
+            {
+                rauPLSave()
+
+                notifyOwner("Map saved!")
+            }
+            
+            else
+            {
+                notifyOwner("No map loaded, please use loa or new.")
+            }
+            break
+
+            #Set; changes the current path set between ground, naval, and air
+            case "set",
+
+            break
+
+            #Default; unknown command
+            default,
+            notifyOwner("Command "+Command+" not found, please use hel for a list of available commands.")
+            break
+        }
+
+        hideChat(1)
+    }
+}
+
+if(clk("load"))
+{
+    if(RauPL_MapLoaded==1)
+    {
+        stoptimer("load")
+
+        notifyOwner("Map loaded!")
+    }
+
+    else
+    {
+        timer("load",LOAD_FREQUENCY)
+
+        rauPLLoad()
+    }
+}

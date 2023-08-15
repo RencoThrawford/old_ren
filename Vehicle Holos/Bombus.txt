@@ -1,0 +1,46 @@
+@name Bombus Holos
+@inputs [Gun Ring]:entity
+#By: Renco
+if(duped()|dupefinished()) {reset()}
+
+if(first())
+{
+    local Index = 0
+    local Green = vec4(0,255,0,255)
+    local Purple = vec4(255,0,255,255)
+    local Colour = vec4(255) #too lazy to fix issues with holos not being detected by optics
+
+    if(Gun:isValid())
+    {
+        #Gun holder thing
+        holoCreate(Index,Gun:toWorld(vec(50,0,0.6)),vec(0.8,0.5,0.5),Gun:toWorld(ang(0,90,0)),Colour,"models/props_c17/truss02f.mdl")
+        holoParent(Index,Gun)
+        Index++
+    }
+
+    if(Ring:isValid())
+    {
+        local AntOrigin1 = vec(0,0,13)
+        local AntNormal1 = vec(0,0,1)
+        local AntOrigin2 = vec(-33,0,0) #vec(-18,0,0)
+        local AntNormal2 = vec(-1,0,1) #vec(-1,0,0)
+
+        #Left Antenna
+        holoCreate(Index,Ring:toWorld(vec(20,-7,43)),vec(1),Ring:toWorld(ang(0,90,45)),Colour,"models/props_survival/jammer/jammer.mdl")
+        holoParent(Index,Ring)
+        holoClipEnabled(Index,1,1)
+        holoClipEnabled(Index,2,1)
+        holoClip(Index,1,AntOrigin1,AntNormal1,0)
+        holoClip(Index,2,AntOrigin2,AntNormal2,0)
+        Index++
+
+        #Right Antenna
+        holoCreate(Index,Ring:toWorld(vec(20,48.65,43)),vec(1),Ring:toWorld(ang(0,90,45)),Colour,"models/props_survival/jammer/jammer.mdl")
+        holoParent(Index,Ring)
+        holoClipEnabled(Index,1,1)
+        holoClipEnabled(Index,2,1)
+        holoClip(Index,1,AntOrigin1,AntNormal1,0)
+        holoClip(Index,2,AntOrigin2,AntNormal2,0)
+        Index++
+    }
+}

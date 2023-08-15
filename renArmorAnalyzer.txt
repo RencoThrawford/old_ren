@@ -1,0 +1,265 @@
+@name renArmorAnalyzer
+@inputs [EGP]:wirelink
+@persist [RECURSE_FREQUENCY DISPLAY_FREQUENCY]:number
+@persist [Max_Recurse_Range Max_Recurse]:number [COL_BACKGROUND1 COL_BACKGROUND2 COL_OBJECTS]:vector4 #User Settings
+@persist [TOTALNOMINALINDEX TOTALEFFECTIVEINDEX ARMORVISSTART]:number [EGPRESOLUTION ARMORVISPOS]:vector2 [VERSION]:string #Global Variables
+@outputs [HitEnts]:table
+@trigger none
+#[
+E2 By:
+    Renco - Basically everything
+    Monkatraz - Idea for holo representation of found entities
+    ACF Dev Team - Ballistic stuffs
+    Whoever wrote "Recursive Total Armor 3"
+
+!!!!!
+REALLY DO-NOT RE-DISTRIBUTE!
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+Provides a neat visulization of your armor and more information you'll ever need
+
+
+
+//////////VERSION LOG\\\\\\\\\\
+V0.0.0 (01-05-21) - Initial Development
+
+
+
+//////////TO-DO\\\\\\\\\\
+
+/////DONE\\\\\
+]#
+
+
+#//////////INITIALIZATION\\\\\\\\\\#
+#Reset the E2 if we have been duped or the dupe has finished spawning
+if(duped()|dupefinished()) {reset()}
+
+#This will stop the nukies
+if(first())
+{
+    COL_BACKGROUND1 = vec4(100,126,255,250)
+    COL_BACKGROUND2 = vec4(240,240,240,255)
+    COL_OBJECTS = vec4(100,100,100,255)
+    local EGPIndex = 1
+    Max_Recurse_Range = 2.5
+    Max_Recurse = 25
+    
+    RECURSE_FREQUENCY = 100
+    DISPLAY_FREQUENCY = 250
+    EGPRESOLUTION = vec2(512)
+    
+    if(->EGP)
+    {
+        #Init EGP
+        EGP:egpClear()
+        EGP:egpResolution(vec2(0),EGPRESOLUTION)
+        EGP:egpGlobalFiltering(1)
+        
+        #Background
+        EGP:egpRoundedBox(EGPIndex,EGPRESOLUTION/2,EGPRESOLUTION)
+        EGP:egpColor(EGPIndex,COL_BACKGROUND1)
+        EGPIndex++
+        
+        #Name Background
+        EGP:egpRoundedBox(EGPIndex,vec2(EGPRESOLUTION[1]/2,EGPRESOLUTION[2]/15),vec2(EGPRESOLUTION[1]/1.5,50))
+        EGP:egpColor(EGPIndex,COL_BACKGROUND2)
+        EGPIndex++
+        
+        #Name
+        EGP:egpText(EGPIndex,"renArmorAnalyzer",vec2(EGPRESOLUTION[1]/2,EGPRESOLUTION[2]/32.5))
+        EGP:egpColor(EGPIndex,COL_OBJECTS)
+        EGP:egpAlign(EGPIndex,1)
+        EGP:egpSize(EGPIndex,35)
+        EGPIndex++
+        
+        
+        #Numbers Background
+        EGP:egpRoundedBox(EGPIndex,vec2(EGPRESOLUTION[1]/2,EGPRESOLUTION[2]/1.2),vec2(EGPRESOLUTION[1]/1.1,150))
+        EGP:egpColor(EGPIndex,COL_BACKGROUND2)
+        EGPIndex++
+        
+        #Impact Angle
+        EGP:egpText(EGPIndex,"Impact Angle: N/A",vec2(EGPRESOLUTION[1]/10,EGPRESOLUTION[2]/1.4))
+        EGP:egpColor(EGPIndex,COL_OBJECTS)
+        EGPIndex++
+        
+        #Impact Mass
+        EGP:egpText(EGPIndex,"Impact Mass: N/A",vec2(EGPRESOLUTION[1]/10,EGPRESOLUTION[2]/1.3))
+        EGP:egpColor(EGPIndex,COL_OBJECTS)
+        EGPIndex++
+        
+        EGP:egpText(EGPIndex,"Total Nominal: N/A",vec2(EGPRESOLUTION[1]/1.10,EGPRESOLUTION[2]/1.4))
+        EGP:egpColor(EGPIndex,COL_OBJECTS)
+        EGP:egpAlign(EGPIndex,2)
+        TOTALNOMINALINDEX = EGPIndex
+        EGPIndex++
+        
+        EGP:egpText(EGPIndex,"Total Effective: N/A",vec2(EGPRESOLUTION[1]/1.10,EGPRESOLUTION[2]/1.3))
+        EGP:egpColor(EGPIndex,COL_OBJECTS)
+        EGP:egpAlign(EGPIndex,2)
+        TOTALEFFECTIVEINDEX = EGPIndex
+        EGPIndex++
+        
+        
+        #Armor Visualization Background
+        EGP:egpRoundedBox(EGPIndex,vec2(EGPRESOLUTION[1]/2,EGPRESOLUTION[2]/2.5),vec2(EGPRESOLUTION[1],225))
+        EGP:egpColor(EGPIndex,COL_BACKGROUND2)
+        ARMORVISPOS = EGP:egpPos(EGPIndex):setX(0)
+        EGPIndex++
+        
+        #Armor Visualization Min Dist
+        EGP:egpText(EGPIndex,"0m",vec2(0,EGPRESOLUTION[2]/1.75))
+        EGP:egpColor(EGPIndex,COL_OBJECTS)
+        EGPIndex++
+        
+        #Armor Visulization Max Dist
+        EGP:egpText(EGPIndex,Max_Recurse_Range+"m",vec2(EGPRESOLUTION[1],EGPRESOLUTION[2]/1.75))
+        EGP:egpColor(EGPIndex,COL_OBJECTS)
+        EGP:egpAlign(EGPIndex,2)
+        EGPIndex++
+        ARMORVISSTART = EGPIndex
+    }
+    
+    function void rangerResetFilter()
+    {
+        rangerReset()
+        rangerFilter(players():add(entity():getConnectedEntities()))
+    }
+    
+    function number entity:distance(Entity:entity)
+    {
+        return ((This:pos() - Entity:pos()):setZ(0):length())
+    }
+
+    #[Computes the probability of overmatch given a prop and caliber
+    Inputs:
+        [ENTITY] - The prop that will be checked
+        Caliber [NUMBER] - The caliber of weapon that will be checked for
+    ]#
+    function number entity:overmatchCheck(Caliber:number)
+    {
+        return clamp((Caliber/This:acfPropArmorMax() - 1.3)/(7-1.3),0,1)
+    }
+
+    function void table:egpGenerateArmorDiagram()
+    {
+        local EGPIndex = ARMORVISSTART
+        for(E=1,Max_Recurse)
+        {
+            local CurArray = This[E,array]
+            local Even = (((E%2)==0) ? 100 : -120)
+            if(CurArray:count() > 3)
+            {
+                local Ang = CurArray[2,number]
+                local Dist = CurArray[3,number]/39.37
+                local Nominal = CurArray[5,number]
+                EGP:egpBox(EGPIndex,vec2((Dist/Max_Recurse_Range)*EGPRESOLUTION[1],ARMORVISPOS[2]),vec2(5,200))
+                EGP:egpAngle(EGPIndex,Ang)
+                EGP:egpColor(EGPIndex,COL_OBJECTS)
+                EGPIndex++
+                
+                EGP:egpText(EGPIndex,Nominal+"mm",vec2(0,Even))
+                EGP:egpParent(EGPIndex,EGPIndex-1)
+                EGP:egpColor(EGPIndex,COL_OBJECTS)
+                EGP:egpAlign(EGPIndex,1)
+                EGPIndex++
+            }
+            elseif(CurArray:count())
+            {
+                local Dist = CurArray[3,number]/39.37
+                local Type = CurArray[1,entity]:type()
+                local Col = vec(255,100,100)
+                if(CurArray[2,string] == "critical") {Col = vec(255,165,0)}
+                EGP:egpBox(EGPIndex,vec2((Dist/Max_Recurse_Range)*EGPRESOLUTION[1],ARMORVISPOS[2]),vec2(5,200))
+                EGP:egpAngle(EGPIndex,0)
+                EGP:egpColor(EGPIndex,Col)
+                EGPIndex++
+                
+                EGP:egpText(EGPIndex,Type,vec2(0,Even))
+                EGP:egpParent(EGPIndex,EGPIndex-1)
+                EGP:egpColor(EGPIndex,Col)
+                EGP:egpAlign(EGPIndex,1)
+                EGPIndex++
+            }
+            else{for(I=1,2) {EGP:egpRemove(EGPIndex) EGPIndex++}}
+        }
+    }
+    
+    rangerPersist(1)
+    rangerResetFilter()
+    if(->EGP) {timer("display",DISPLAY_FREQUENCY) timer("recurse",RECURSE_FREQUENCY)}
+}
+
+elseif(clk("recurse"))
+{
+    timer("recurse",RECURSE_FREQUENCY)
+    rangerResetFilter()
+    HitEnts = table()
+    
+    for(R=1,Max_Recurse)
+    {
+        local Trace = rangerOffset(Max_Recurse_Range*39.37,entity():pos(),entity():up())
+        local TraceEnt = Trace:entity()
+        if(TraceEnt:isValid())
+        {
+            if(TraceEnt:acfHitClip(Trace:pos()))
+            {
+                rangerFilter(TraceEnt)
+            }
+            else
+            {
+                switch(TraceEnt:type())
+                {
+                    case "prop_physics",
+                        #acos((Trace:hitNormal()):dot(-entity():up()))
+                        #entity():toLocal(TraceEnt:angles()):yaw()
+                        HitEnts:pushArray(array(TraceEnt,acos(Trace:hitNormal():dot(-entity():up())),Trace:distance(),TraceEnt:mass(),TraceEnt:acfPropArmorMax(),Trace:acfEffectiveArmor()))
+                    break
+                    
+                    case "acf_ammo",
+                    case "acf_fueltank",
+                        HitEnts:pushArray(array(TraceEnt,"explosive_critical",entity():distance(TraceEnt)))
+                    break
+                    
+                    case "prop_vehicle_prisoner_pod",
+                    case "acf_gearbox",
+                    case "acf_engine",
+                    case "acf_rack",
+                    case "acf_gun",
+                        HitEnts:pushArray(array(TraceEnt,"critical",entity():distance(TraceEnt)))
+                    break
+                }
+                
+                rangerFilter(TraceEnt)
+            }
+        }
+        else{break}
+    }
+}
+
+elseif(clk("display"))
+{
+    timer("display",DISPLAY_FREQUENCY)
+    local TotalNominal = 0
+    local TotalEffective = 0
+    
+    #why foreach no work
+    for(K=1,HitEnts:count())
+    {
+        local CurArray = HitEnts[K,array]
+        if(CurArray:count()>2)
+        {
+            TotalNominal += CurArray[5,number]
+            TotalEffective += CurArray[6,number]
+        }
+    }
+    
+    EGP:egpSetText(TOTALNOMINALINDEX,"Total Nominal: "+TotalNominal+"mm")
+    EGP:egpSetText(TOTALEFFECTIVEINDEX,"Total Effective: "+TotalEffective+"mm")
+    
+    HitEnts:egpGenerateArmorDiagram()
+}

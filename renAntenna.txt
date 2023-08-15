@@ -1,0 +1,86 @@
+@name renAntenna
+@persist [EASING]:number #User Settings
+@persist [UPDATE_FREQUENCY]:number [VERSION]:string #Global Variables
+#@model whatever the fuck the popcan model is
+#[
+E2 By:
+    Renco - Everything
+    Ghosteh - Idea
+
+!!!!!
+REALLY DO-NOT RE-DISTRIBUTE!
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+This E2 creates a simple little antenna hologram that moves when the vehicle accelerates/decelerated
+This E2 also has been phased out for the CSGO model I guess
+
+
+
+//////////VERSION LOG\\\\\\\\\\
+V0.0.0 (10-14-20) - Initial Development
+
+
+
+//////////TO-DO\\\\\\\\\\
+Biconical Antenna: https://upload.wikimedia.org/wikipedia/commons/a/a5/Schwarzbeck_RE_1790.jpg
+Discone Antenna: https://upload.wikimedia.org/wikipedia/commons/8/89/Discone-VHF-UHF-hardline.jpg
+Ground Plane Antenna 1: https://en.wikipedia.org/wiki/File:Ground_plane_antenna_diagram.svg
+Ground Plane Antenna 2: https://en.wikipedia.org/wiki/File:Antenne_gp_vhf_4.jpg
+CB Antenna: https://en.wikipedia.org/wiki/File:CB_antenna.jpg
+Utilize: https://easings.net/ , ghosteh said elastic or bounce
+Set the model to the popcan
+Easings:
+    Constantly increasing number
+    Decreases upon acceleration
+    Pass the number to the easing
+
+/////DONE\\\\\
+]#
+
+
+#//////////INITIALZATION\\\\\\\\\#
+#Reset the E2 if we have been duped or the dupe has finished spawning
+if (duped()|dupefinished()) {reset()}
+
+#You do the things first
+if(first())
+{
+    #/////SETTINGS\\\\\#
+    #This changes what model we'll be using
+    #0 - Normal whip Antenna
+    #1 - Biconical Antenna
+    #2 - Ground Plane Antenna Variation 1
+    #3 - Ground Plane Antenna Variation 2
+    #4 - Citizen's Band Antenna
+    local Model = 0 #Default: 0
+
+    #This changes how the antenna moves, I recommend keeping this default
+    EASING = 0 #Default: 0
+
+
+
+    #/////INITIALIZE\\\\\#
+    #//FREQUENCIES\\#
+    #Changes at what 
+    UPDATE_FREQUENCY = 100 #Default: 100
+
+
+    #//LIBRARIES\\#
+    #include "renEasingsLib"
+
+    #//VERSION\\#
+    VERSION = "V0.0.0"
+    setName("renAntenna "+VERSION)
+}
+
+
+
+#//////////MAIN LOOP\\\\\\\\\\#
+#This updates the antenna.
+elseif(clk("update"))
+{
+    timer("update",UPDATE_FREQUENCY)
+}

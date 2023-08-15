@@ -1,0 +1,25 @@
+@name renDoor
+#[
+E2 By:
+    Renco - Everything
+
+!!!!!
+REALLY DO-NOT RE-DISTRIBUTE!
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+This E2 does holoparented doors, also (optionally) allows you to use any type of easing for more realistic movement
+
+
+
+//////////VERSION LOG\\\\\\\\\\
+V0.0.0 (10-14-20) - Initial Development
+
+
+
+//////////TO-DO\\\\\\\\\\
+
+/////DONE\\\\\
+]#

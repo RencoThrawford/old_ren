@@ -1,0 +1,888 @@
+@name renMobility
+@inputs [MSGBUS]:table [DriverSeat]:entity [DriverPrevWeapon DriverNextWeapon]:number [DriverCam]:wirelink #Control inputs
+@inputs [Gearbox]:entity #Generic gearbox input
+@inputs [LeftGearbox RightGearbox]:entity #Dual gearbox steering inputs
+@inputs [F1 F2 R1 R2]:entity #Slave steering inputs
+@outputs [Throttle]:number #Generic engine output
+@outputs [Gear Clutch Brake]:number #Generic transmission outputs
+@outputs [LeftGear RightGear]:number #Tank steer gear outputs
+@outputs [SteerRate]:number #Double differential outputs
+@outputs [LeftClutch RightClutch LeftBrake RightBrake]:number #Tank steer clutch/gear outputs
+@outputs [LeftLatch CrossLatch RightLatch]:number #Latch Outputs
+@persist [STEERING_FREQUENCY GEARING_FREQUENCY MISC_FREQUENCY CHECK_FREQUENCY OPERATOR_QUERY_FREQUENCY]:number #Frequencies
+@persist [Gunner]:entity [Aimpos Velocity]:vector [Self]:array #MSGBUS Inputs
+@persist [Speed_Ratio Steering_Input RPM Fuel_On Mouse_Steer Brakes_Applied]:number [Transmission_Mode]:string [Driver]:entity [Powerband]:vector4 [Engines]:array #MSGBUS Outputs
+@persist [Saftey ThrottleLock ParkingBrake WS AD LastWS Started TrackSteering DriverCamActive Zoom TransPitch EngineCount]:number [Operator]:entity [BaseAng BaseAngVel]:angle [PidState Governor]:array #"Runtime" Variables
+@persist [SLAVEUSE]:number [BASE]:entity [ACTIVATIONS FUELS GEARRATIOS]:array #Global Variables
+@persist [TYPE BRAKEFORCE IDLETHROTTLE INPUTSMOOTHER MAXYAWVEL TRACKDEADZONE MAXSTEERANGLE MIDDLESTEERDIVISOR MAXSPEED GOVERNORMODE ISCVT]:number [HORNSOUND STARTUPSOUND SHUTDOWNSOUND IDLESOUND]:string [GOVERNORSETTING]:vector [PIDSETTING]:array #User Settings
+@trigger [MSGBUS] [DriverPrevWeapon DriverNextWeapon]
+runOnKeys(Operator,1)
+#[
+E2 By:
+    Renco - Nearly Everything
+    Red - Helpful functions, support, and MSGBUS
+    Fizzles - Alpha Tester
+
+!!!!!
+REALLY DO-NOT RE-DISTRIBUTE!
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+Does mobility things
+
+Type 0; Just gearbox and or steering control for a car or somthing
+Type 1; Dual clutch tank steering, requires a dual-clutch gearbox
+Type 2; Dual transfer case tank steering, two transfer cases being fed by a gearbox
+Type 3; Dual gearbox tank steering, two gearboxes fed directly by an engine or a transfercase/differential
+Type 4; Regnerative tank steering, regenerative steering case fed by a gearbox
+
+!!!GEARBOX SHOULD BE WIRED TO THE GEARBOX LINKED TO THE ENGINES!!!
+!!!GEARBOX SHOULD BE THE GEARING GEARBOX!!!
+!!!UNLESS USING TYPE 3 STEERING!!!
+
+
+
+//////////VERSION LOG\\\\\\\\\\
+V0.0.0 (10-14-20) - Initial Devlopment
+V0.0.1 (12-08-20)
+    [ADDED] Operator input control
+    [ADDED] Vehicle steering control
+    [ADDED] Gearing control
+    [ADDED] Misc. Thread
+    [ADDED] Operator finding
+V0.0.2 (12-11-20)
+    [UPDATED] Improved gear ratio building for type 3 steering
+    [ADDED] Gear ratio building
+    [ADDED] Automatic engine detection via acfLinks() on gearbox
+    [ADDED] Powerband building based on first engine detected
+    [ADDED] Resets dual gearbox steering when not using dual gearbox steering
+    [ADDED] Gearbox and engine idle sounds
+    [FIXED] Fixed throttle only being set to 1 instead of 100
+V0.0.3 (12-13-20)
+    [FIXED] Numerous undocumented fixes with Fizzle's help
+V0.0.4 (12-25-20)
+    [FIXED] Numerous undocumented issues
+V0.0.6 (12-26-20)
+    [FIXED] Fixed various input issues
+    [ADDED] Implemented base detection via self array
+    [FIXED] Fixed breaks not functioning
+    [FIXED] Fixed throttle lock only working on next input clk
+    [FIXED] Fixed everything running as fast as it can (1500us)
+V0.0.7 (12-27-20)
+    [UPDATED] Updated throttle to open when steering with tank steering
+    [UPDATED] Improved gear shifting code
+    [ADDED] Added ignition freezing/unfreezing
+    [FIXED] Fixed clutch/break/latches not re-engaging when using neutral steering
+    [FIXED] Fixed horn sound not playing
+V0.0.8 (12-28-20)
+    [FIXED] Fixed ignition sounds playing everytime ignition is pressed (Also fixes some other things)
+V1.0.0 (12-30-20)
+    [ADDED] Added driver camera
+    [ADDED] Added simple input smoothing
+V1.0.1 (12-31-20)
+    [UPDATED] Simplified zooming code for driver camera
+V1.0.2 (01-12-21)
+    [FIXED] Fixed issue where right weld latches were not used
+V1.0.3 (01-13-21)
+    [ADDED] Added TBSS (Terrain Based Sound System)
+V1.0.4 (01-14-21)
+    [ADDED] Stopping TBSS sounds upon turning the ingition off
+    [ADDED] Added fuel toggling
+    [ADDED] Added speed governor to maintain the maximum speed
+    [ADDED] Added code for MSGBUS speed ratio
+    [ADDED] Added basic automatic clutch when engine rpm is below minimum powerband
+    [FIXED] Fixed TBSS integration not working
+    [FIXED] Fixed MSGBUS VELOCITY input being wrong
+    [UPDATED] Improved mouse steering for tracked vehicles
+V1.0.5 (01-16-21)
+    [ADDED] Added code to control regenerative steering
+V1.0.6 (01-17-21)
+    [FIXED] Fixed latches being tied to clutch
+V1.0.7 (01-18-21)
+    [UPDATED] Exposed CVT setting (You can use cvt's now)
+    [UPDATED] Improved steering PID integration
+V1.0.8 (01-23-21)
+    [ADDED] Added a new hotkey to check your fuel level (SAFTEY + TOGGLE_FUEL) {R + Right_Control}
+    [ADDED] Added gearbox whining sound
+    [ADDED] Added switching sounds to the various toggleable things
+    [ADDED] Added detection and notification of destroyed engines
+    [FIXED] Fixed slave steering not being as agressive as it was before the mousesteer track update
+    [UPDATED] Minor performance improvements
+    [UPDATED] Minor improvements to gearing code
+    [UPDATED] Improved documentation for some of Red's functions and some other things
+    [UPDATED] Updated ignition sounds to play from the engine
+    [UPDATED] Updated ignition sounds to use a function for cleanliness
+
+
+
+//////////TO-DO\\\\\\\\\\
+
+/////DONE\\\\\
+Automatic engine detection
+R+Space to toggle Brakes
+
+
+
+//////////MSGBUS\\\\\\\\\\
+/////MSGBUS INPUTS\\\\\
+AIMPOS   [VECTOR3] - Gunner's aimpos for mouse steering
+GUNNER   [ENTITY]  - Gunner who takes control of the vehicle if no driver is found
+VELOCITY [VECTOR3] - Current vehicle velocity
+SELF     [ARRAY]   - Everything connected to the vehicle
+
+////MSGBUS OUTPUTS\\\\\
+SPD_RATIO         [NUMBER]  - Ratio of speed to maximum speed
+DRIVER            [ENTITY]  - Driver of the current vehicle
+STEERING_INPUT    [NUMBER]  - -1/1 of steering wheel position
+RPM               [NUMBER]  - Engine rpm
+FUEL_ON           [NUMBER]  - If fuel is currently being used
+POWERBAND         [VECTOR4] - A vector 4: idle, min, max, redline
+MOUSE_STEER       [NUMBER]  - Mouse steering on/off
+TRANSMISSION_MODE [STRING]  - Current transmission mode
+BRAKES_APPLIED    [NUMBER]  - If Brakes are currently being applied
+]#
+
+
+#//////////INITIALIZATION\\\\\\\\\#
+#Reset the E2 if we have been duped or the dupe has finished spawning
+if(duped()|dupefinished()) {reset()}
+
+#Nothing left to do but this
+if(first())
+{
+    #/////SETTINGS\\\\\#
+    #//GENERIC\\#
+    #0 - Controls a single gearbox
+    #1 - Classic dual clutch tank steering
+    #2 - Dual transfer case steering, enables zero point turning when you hold the Brakes
+    #3 - Dual gearbox steering, same as dual transfer; uses two different gearboxes
+    #4 - Regenerative Steering
+    TYPE = 0 #Default: 0
+
+    #This changes the maximum value the Brakes will be set to
+    BRAKEFORCE = 2.5 #Default: 5
+
+    #This changes the value the throttle will be set to without any thorttle input
+    IDLETHROTTLE = 30 #Default: 30
+
+    #Changes how fast the input increases/decreases
+    INPUTSMOOTHER = 0.15 #Default: 0.25
+
+
+    #//TRACKED STEERING\\#
+    #Proportional
+    PIDSETTING[1,number] = 0.25 #Default: 0.25
+    #Integral
+    PIDSETTING[2,number] = 0.1 #Default: 0.1
+    #Derivative
+    PIDSETTING[3,number] = 0.25 #Default: 0.25
+    #Clamp for Integral
+    PIDSETTING[4,number] = 1 #Default: 1
+
+    #Deadzone for proportional
+    TRACKDEADZONE = 25 #Default: 25
+
+    #This should be the maximum angular velocity the chip will try to maintain while steering
+    MAXYAWVEL = 50 #Default: 60
+
+
+    #//SLAVE STEERING\\#
+    #This changes the maximum angle the wheels are able to steer at
+    MAXSTEERANGLE = 30 #Default: 30
+
+    #This is the divisor for the inner set of steering wheels, used for stuff like 8x8's
+    MIDDLESTEERDIVISOR = 2.5 #Default: 2
+
+
+    #//SOUNDS\\#
+    #Sets the horn sound that plays when you press SAFTEY & HORN
+    HORNSOUND = "acf_extra/vehiclefx/horn/horn10.wav" #Default: "acf_extra/vehiclefx/horn/horn10.wav"
+
+    #Sets your startup/shutdown sounds
+    STARTUPSOUND = "acf_extra/vehiclefx/engines/gnomefather/hl42up.wav"   #Default: "acf_extra/vehiclefx/engines/gnomefather/hl42up.wav"
+    SHUTDOWNSOUND = "acf_extra/vehiclefx/engines/gnomefather/hl42down.wav" #Default: "acf_extra/vehiclefx/engines/gnomefather/hl42down.wav"
+
+    #Sets the sound that will play when the engine is at lower rpms
+    IDLESOUND = "acf_extra/vehiclefx/engines/Nanjing_loop.wav" #Default: "acf_extra/vehiclefx/engines/Nanjing_loop.wav"
+
+
+    #//SPEED GOVERNOR\\#
+    #Speed in km/h
+    MAXSPEED = 65 #Default: 60
+
+    #Enabling governor
+    GOVERNORMODE = 1 #Default: 1
+
+    #You probably dont need to touch this
+    GOVERNORSETTING = vec(5,0.2,3) #Default: vec(5,0.2,3)
+
+
+    #//DRIVER CAMERA\\#
+    #Changes the camera position (Relative to the base)
+    local DRIVERCAMPOS = vec(0,0,80) #Default: vec(0,0,50)
+
+    #Changes wether or not the camera is on by default
+    DriverCamActive = 1 #Default: 1
+
+
+    #//MISC\\#
+    #Are you using a CVT as a gearbox? (Why can't we autodetect this?)
+    ISCVT = 0 #Default: 0
+    
+    #This enables/disables your fuel
+    Fuel_On = 1 #Default: 1
+
+    #Starting index to start spawning holograms at
+    local Index = 0 #Default: 0
+
+
+
+    #/////LIBRARIES\\\\\#
+    #include "renKeyLib"
+    #include "TBSS"
+
+
+
+    #/////INITIALIZE VARIABLES\\\\\#
+    #//FREQUENCIES\\#
+    #Frequency for steering in general
+    STEERING_FREQUENCY = 75 #Default: 75
+    #Frequency for checking when to shift
+    GEARING_FREQUENCY = 150 #Default: 150
+    #Frequency for sounds n' shit
+    MISC_FREQUENCY = 200  #Default: 200
+    #Frequency for checking if engines or some shit has been destroyed
+    CHECK_FREQUENCY = 600 #Default: 600
+    #Frequency for looking for a driver
+    OPERATOR_QUERY_FREQUENCY = 1000 #Default: 1000
+
+    #//GLOBAL\\#
+    #On or orf
+    ACTIVATIONS[0,string] = "off"
+    ACTIVATIONS[1,string] = "on"
+
+    #Determines if we're using slaveplate steering
+    SLAVEUSE = (F1|F2|R1|R2)
+
+    #Grabs every engine entity connected to the gearbox and pushes them into an array
+    #probably temporary, probably
+    if(Gearbox) {foreach(I,E:entity = Gearbox:acfLinks()){if(E:acfIsEngine()) {Engines:pushEntity(E)}}}
+    elseif(LeftGearbox) {foreach(I,E:entity = Gearbox:acfLinks()){if(E:acfIsEngine()) {Engines:pushEntity(E)}}}
+    foreach(K,F:entity = Engines[1,entity]:acfLinks()) {if(F:acfIsFuel()) {FUELS:pushEntity(F)}}
+    EngineCount = Engines:count()
+
+    #Default the driver cam FOV to this
+    Zoom = 100
+
+
+
+    #/////FUNCTIONS\\\\\#
+    #[Get the stuff we need from the MSGBUS
+    ]#
+    function void msgBusIn()
+    {
+        if(->MSGBUS)
+        {
+            Aimpos   = MSGBUS["AIMPOS",vector]
+            Gunner   = MSGBUS["GUNNER",entity]
+            Velocity = MSGBUS["VELOCITY",vector]
+            Self     = MSGBUS["SELF",array]
+        }
+    }
+
+    #[Updates the MSGBUS with our new data
+    ]#
+    function void msgBusOut()
+    {
+        if(->MSGBUS)
+        {
+            MSGBUS["SPD_RATIO",number]         = Speed_Ratio
+            MSGBUS["DRIVER",entity]            = Operator
+            MSGBUS["STEERING_INPUT",number]    = Steering_Input
+            MSGBUS["RPM",number]               = RPM
+            MSGBUS["ENGINES",array]            = Engines
+            MSGBUS["FUEL_ON",number]           = Fuel_On
+            MSGBUS["POWERBAND",vector4]        = Powerband
+            MSGBUS["MOUSE_STEER",number]       = Mouse_Steer
+            MSGBUS["TRANSMISSION_MODE",string] = Transmission_Mode
+            MSGBUS["BREAKS_APPLIED",number]    = Brakes_Applied
+        }
+    }
+
+    #[One of Red's functions to determine when to gear up or down
+    Inputs:
+        CurrentGear [NUMBER] - Current gear
+        RPM [NUMBER] - RPM of the currently monitored engine
+        PowerbandMin [NUMBER] - Minimum powerband of the currently monitored engine
+        PowerbandMax [NUMBER] - Maximum powerband of the currently monitored engine
+        PowerbandRedline [NUMBER] - Redline of the currently monitored engine
+        Direction [NUMBER] - 1/-1 going forwads/backwards
+        TransmissionGearRatios [ARRAY] - Array of gear ratios for main gearing gearbox
+        CVT [NUMBER] - Are we using a CVT?
+        MaximumThrottle [NUMBER] - Throttle currently used?
+        ReversingGearbox [NUMBER] - Using a reversing gearbox?
+        PitchAngle [NUMBER] - Pitch of the vehicle
+    Return:
+        [NUMBER] - 1/0/-1 shifting up, down, or not
+    ]#
+    function number evalShift(CurrentGear:number,RPM:number,PowerbandMin:number,PowerbandMax:number,PowerbandRedline:number,Direction:number,TransmissionGearRatios:array,CVT:number,MaximumThrottle:number,ReversingGearbox:number,PitchAngle:number){
+        if(CVT) {
+            if(!ReversingGearbox) {
+                if((CurrentGear == 1) & (Direction == -1)) {
+                    return 1
+                } elseif((CurrentGear == 2) & (Direction == 1)) {
+                    return -1
+                } else {
+                    return 0
+                }
+            }
+            else {
+                return 1 - CurrentGear
+            }
+        }
+
+        local GearCount = TransmissionGearRatios:count()
+        local CurrentRatio = TransmissionGearRatios[CurrentGear,number]
+
+        #change of direction
+        local CurrentRatioAsDirection = (ReversingGearbox) ? 1 : ((CurrentRatio < 0) ? -1 : 1)
+        if(Direction != CurrentRatioAsDirection) {
+            local LowestRatio = Direction
+            local DesiredGear = 1
+            for(N=1,GearCount) {
+                local Ratio = TransmissionGearRatios[N,number]
+                local SameDirection = ((Direction == 1) & (Ratio > 0)) | ((Direction == -1) & (Ratio < 0))
+                if(SameDirection) {
+                    DesiredGear = N
+                }
+            }
+
+            return DesiredGear - CurrentGear
+        }
+
+        local DirectionalPitchAngle = PitchAngle * Direction
+        local PitchRatio = clamp(DirectionalPitchAngle / 45,0,1)
+        local IdealRPM = (DirectionalPitchAngle < 0) ? (PowerbandMax) : ((PowerbandMin * PitchRatio) + (PowerbandMax * (1 - PitchRatio)) )
+        #determine if we can shift up
+        local CanUpshift = (CurrentGear+1 <= GearCount) & (abs(TransmissionGearRatios[CurrentGear+1,number]) > abs(CurrentRatio)) & (DirectionalPitchAngle > -45)  #45d is pitch limit
+        local CanDownshift = (CurrentGear-1 > 0) & (abs(TransmissionGearRatios[CurrentGear-1,number]) < abs(CurrentRatio))
+        #evaluation of next shift point
+        local UpRatio = TransmissionGearRatios[CurrentGear + 1,number]
+        local DownRatio = TransmissionGearRatios[CurrentGear - 1,number]
+        local CurrentRatio = TransmissionGearRatios[CurrentGear,number]
+        local OutRPM = (RPM * CurrentRatio)
+        local UpRPM = OutRPM / UpRatio
+        local DownRPM = OutRPM / DownRatio
+        local UpDifference = abs(UpRPM - IdealRPM)  #the difference between ideal RPM, and the RPM engine would be at in higher gear
+        local DownDifference = abs(DownRPM - IdealRPM)  #the difference between ideal RPM, and the RPM engine would be at in lower gear
+        local CurrentDifference = abs(RPM - IdealRPM) #the difference between ideal RPM and the current RPM
+
+        #heuristic estimate of roughly how high the rev can go
+        #TODO: replace with a more scientific system
+        local ThrottleRPM = (MaximumThrottle == 100) ? (PowerbandRedline) : (PowerbandMax + ((PowerbandRedline - PowerbandMax) * (MaximumThrottle / 200)))
+
+        local MaxAllowedRPM = clamp(ThrottleRPM,PowerbandMax,(PowerbandMax * 0.5) + (PowerbandRedline * 0.5))
+
+        if((UpDifference < CurrentDifference) | (RPM >= MaxAllowedRPM)) {
+            if(CanUpshift) {
+                return 1
+            }
+        } elseif((DownDifference < CurrentDifference) & (DownRPM < PowerbandRedline) & (DownRPM < MaxAllowedRPM)) {
+            if(CanDownshift) {
+                return -1
+            }
+        }
+
+        return 0
+    }
+
+    #[One of Red's functions to help control steering of tracked vehicles using a PID
+    Inputs:
+        Input [NUMBER] - Error
+        Settings [ARRAY] - arrray(P,I,D,Clamp)
+        State [ARRAY] - The array to be used to store stuff for the PID
+        Deadzone [NUMBER] - Deadzone for proportional
+    Return:
+        [NUMBER] - Modifier to be added to steering input
+    ]#
+    function number steerPID(Input:number,Settings:array,State:array,Deadzone:number) {
+        local Hold = Deadzone < 0
+        local Proportional = (Hold) ? (Input * (abs(Input) > Deadzone)) : (Input)
+        local ForceError = (Input - State[1,number]) * 0.1  #force feedback
+        local Integral = clamp(State[1,number] + (Input + ForceError),-Settings[4,number],Settings[4,number])
+        local Derivative = Input - State[2,number]
+
+        local ForceSum = (Proportional*Settings[1,number]) + (Integral*Settings[2,number]) + (Derivative*Settings[3,number])
+        local PID = (!Hold) ? ((abs(ForceSum) > (Deadzone / 2)) ? (ForceSum) : (0)) : (ForceSum)
+
+        State[1,number] = Integral
+        State[2,number] = Input
+        State[3,number] = PID
+
+        return PID
+    }
+
+    #[One of Red's functions to generate an array of all gear ratios of a gearbox
+    Inputs:
+        Transmission [ENTITY] - The gearbox to generate the array for
+    Return:
+        [ARRAY] - Array of gear ratios
+    ]#
+    function array getGearRatios(Transmission:entity) {
+        local Array = array()
+        for(N=1,Transmission:acfNumGears()) {
+            local Ratio = Transmission:acfGearRatio(N)
+            Array[N,number] = int(Ratio * 100) / 100    #fixes some shit with wiremod
+        }
+        return Array
+    }
+
+    #[One of Red's functions to check if an entity is makesphericaled
+    Inputs:
+        [ENTITY] - The entity to be checked if spherical
+    Return:
+        [NUMBER] - Is the entity spehcial?
+    ]#
+    function number entity:checkSphericalWheel()
+    {
+        local Radius = This:radius()
+        if(Radius < 10) {return 0}
+        local Box = This:boxSize()
+        if(Box[1] == Box[2])
+        {
+            if(Box[2] == Box[3])
+            {
+                if(Box[3] == Box[1])
+                {
+                    return 1
+                }
+                else
+                {
+                    return 0
+                }
+            }
+            else
+            {
+                return 0
+            }
+        }
+        else
+        {
+            return 0
+        }
+    }
+
+    #[A Red function to update the sound of a gearbox !!!MODIFIED!!!
+    Inputs:
+        [NUMBER] - Last return
+        Index [STRING] - The index of the gear whine sound
+        RPM [NUMBER] - RPM of the engine
+        MaxRPM [NUMBER] - Maximum RPM of the engine
+        Clutch [NUMBER] - Are we using the clutch?
+    Return:
+        [NUMBER] - Number to return to [Number]
+    ]#
+    function number number:gearboxSoundUpdate(Index:string,RPM:number,MaxRPM:number,Clutch:number)
+    {
+        local NewRatio = RPM/MaxRPM
+        local Ratio = (This * 0.9) + (NewRatio * 0.2)
+        soundPitch(Index,Ratio * 120,0.25)
+        soundVolume(Index,Ratio * 0.4 * (1-Clutch),0.25)
+        return Ratio
+    }
+
+    #[Yet another function from Red to decide what sound to use
+    Inputs:
+        Box [ENTITY] - The gearbox to get the sound for
+    Return:
+        [STRING] - The glorious sound of whining from your gearbox
+    ]#
+    function string gearboxSound(Box:entity)
+    {
+        local Model = Box:model()
+        #models/engines/transaxial_s.mdl
+        local SizeChar = Model:explode("_")[2,string]:explode("")[1,string]
+        if(SizeChar == "s")
+        {
+            return "acf_extra/vehiclefx/trans/tw_onverylow.wav"
+        }
+        elseif(SizeChar == "m")
+        {
+            return "acf_extra/vehiclefx/trans/gearwhine2.wav"
+        }
+        elseif(SizeChar == "l")
+        {
+            return "acf_extra/vehiclefx/trans/gearwhine.wav"
+        }
+        return "acf_extra/vehiclefx/trans/trans.wav"
+    }
+
+    #[A simple pid for controlling an engine's throttle to maintain a certain speed
+    Inputs:
+        [ARRAY] - The array last returned
+        CurSpeed [NUMBER] - Our current speed
+        MaxSpeed [NUMBER] - Maximum allowable speed
+        Frequency [NUMBER] - How many miliseconds between executions
+        Settings [VECTOR] - Settings for a pid vec(Kp,Ki,Kd)
+    Return:
+        [ARRAY] - And array of array(P+I+D,LastError,I)
+    ]#
+    function array array:pidSpeedGovernor(CurSpeed:number,MaxSpeed:number,Frequency:number,Settings:vector)
+    {
+        local Timestep = Frequency/1000
+        local Error = MaxSpeed - CurSpeed
+        local I = clamp(This[3,number] + Error,-50,50)*Timestep
+        local D = (Error - This[2,number])/Timestep
+        return array((Settings[1]*Error)+(Settings[2]*I)+(Settings[3]*D),Error,I)
+    }
+
+    #[Notifies whoever is deemed driver
+    Inputs:
+        Message [STRING] - The message that will be sent
+    ]#
+    function void operatorNotify(Message:string)
+    {
+        Operator:vehicle():hintDriver("[renMobility] "+Message,5.5)
+    }
+
+    #[Turns on/off an array of ACF entities
+    Inputs
+        [ARRAY] - Array of ACF engines
+        Active [NUMBER] - Active or not
+    ]#
+    function void array:acfActive(Active:number)
+    {
+        foreach(I,E:entity = This) {E:acfActive(Active)}
+    }
+
+    #[Updates the global powerband for the engine
+    Inputs:
+        [ENTITY] - The engine
+    ]#
+    function void entity:updateInfo()
+    {
+        Powerband = vec4(This:acfIdleRPM(),This:acfPowerbandMin(),This:acfPowerbandMax(),This:acfRedline())
+    }
+
+    #[Plays a switching sound
+    ]#
+    function void soundSwitch() {soundPlay("switch",0.6,"buttons/lightswitch2.wav")}
+    
+    #[Plays an explodey sound (For when somthing gets destroyed IE: Engine, Gearbox
+    ]#
+    function void soundExplode() {soundPlay("explode",2,"ambient/materials/cartrap_explode_impact"+randint(1,2)+".wav")}
+    
+    function void soundIgnition(Active:number) {soundStop("ignition") Engines[1,entity]:soundPlay("ignition",0,Active ? STARTUPSOUND : SHUTDOWNSOUND)}
+
+
+
+    #/////INTIALIZE\\\\\#
+    timer("operator_query",OPERATOR_QUERY_FREQUENCY)
+    GEARRATIOS = getGearRatios(Gearbox)
+    FUELS:acfActive(Fuel_On)
+    Engines[1,entity]:updateInfo()
+    
+
+    #//VERSION\\#
+    VERSION = "V1.0.8"
+    setName("renMobility "+VERSION)
+
+
+    #//FINALIZE MSGBUS\\#
+    MSGBUS["NODE_NAMES",array]:pushString(entity():getName())
+    msgBusIn()
+    msgBusOut()
+    BASE = Self[1,entity] #The base input on optics should always be the first entry in the self array
+
+
+    #//DRIVER CAMERA\\#
+    if(->DriverSeat)
+    {
+        holoCreate(Index,BASE:toWorld(DRIVERCAMPOS),vec(0),BASE:toWorld(ang(0)),vec4(0),"plane")
+        holoParent(Index,BASE)
+        DriverCam["Parent",entity] = holoEntity(Index)
+        DriverCam["FilterEntities",array] = Self
+        DriverCam["FOV",number] = Zoom
+        Index++
+    }
+}
+
+elseif(inputClk())
+{
+    msgBusIn()
+
+    if(changed(DriverPrevWeapon)|changed(DriverNextWeapon))
+    {
+        local ZoomInc = (DriverNextWeapon-DriverPrevWeapon)*20
+        Zoom = clamp(Zoom+ZoomInc,10,300)
+
+        DriverCam["Distance",number] = max(clamp(Zoom,100,300)-100,0)
+        DriverCam["FOV",number] = clamp(Zoom,10,100)
+    }
+}
+
+elseif(keyClk(Operator))
+{
+    if((!Operator:isTyping())&Operator:vehicle())
+    {
+        local Key = keyClkPressed()
+        local Pressed = Operator:keyPressed(Key)
+
+        switch(Key)
+        {
+            case RenKL_KEYS["SAFTEY",string],
+                Saftey = Pressed
+            break
+
+            case RenKL_KEYS["IGNITION",string],
+                if(Saftey)
+                {
+                    Started = Pressed
+
+                    foreach(K,E:entity = Self) {if(E:checkSphericalWheel()) {E:propFreeze(!Started)}}
+                    BASE:propFreeze(!Started)
+
+                    Engines:acfActive(Started)
+                }
+
+                if(changed(Started))
+                {
+                    soundIgnition(Started)
+
+                    if(Started)
+                    {
+                        timer("steering",STEERING_FREQUENCY)
+                        timer("gearing",GEARING_FREQUENCY)
+                        timer("misc",MISC_FREQUENCY)
+                        timer("check",CHECK_FREQUENCY)
+
+                        Gearbox:soundPlay("whine",0,gearboxSound(Gearbox))
+                        soundVolume("whine",0)
+
+                        Engines[1,entity]:soundPlay("eidle",0,IDLESOUND)
+                    }
+
+                    else
+                    {
+                        stoptimer("misc")
+                        stoptimer("gearing")
+                        stoptimer("steering")
+                        stoptimer("check")
+
+                        soundStop("whine")
+
+                        soundStop("eidle")
+                        soundVolume("tbss",0)
+                    }
+                }
+            break
+
+            case RenKL_KEYS["HORN",string],
+                if(Saftey&Pressed) {soundPlay("horn",0,HORNSOUND)} else{soundStop("horn")}
+            break
+
+            case RenKL_KEYS["TOGGLE_MOUSE",string],
+                if(Started&Pressed){Mouse_Steer = !Mouse_Steer soundSwitch() operatorNotify("Mouse steering "+ACTIVATIONS[Mouse_Steer,string]+".")}
+            break
+
+            case RenKL_KEYS["TOGGLE_THROTTLE_LOCK",string],
+                if(Pressed) {ThrottleLock = !ThrottleLock Throttle = ThrottleLock*100 soundSwitch() operatorNotify("Throttle lock "+ACTIVATIONS[ThrottleLock,string]+".")}
+            break
+            
+            case RenKL_KEYS["TOGGLE_FUEL",string],
+                if(Pressed)
+                {
+                    if(Saftey) {operatorNotify((Engines[1,entity]:acfFuelLevel()*100)+"% fuel remaining. (Fuel "+ACTIVATIONS[Fuel_On,string]+")")}
+                    else{Fuel_On = !Fuel_On FUELS:acfActive(Fuel_On) soundSwitch() operatorNotify("Fuel use "+ACTIVATIONS[Fuel_On,string]+".")}
+                }
+            break
+            
+            case RenKL_KEYS["VIEW_SWITCH",string],
+                if(Pressed)
+                {
+                    if(DriverSeat:driver()==Operator) {DriverCamActive = !DriverCamActive DriverCam["Activated",number] = DriverCamActive soundSwitch()}
+                }
+            break
+
+            default,
+                WS = Operator:keyPressed(RenKL_KEYS["FORWARD",string])-Operator:keyPressed(RenKL_KEYS["BACKWARD",string]) #Backwards or forwards?
+                if(changed(WS)&WS) {LastWS = WS} #The last direction we were going in
+                if(LastWS==1) {Transmission_Mode = "FORWARD"} elseif(LastWS==-1) {Transmission_Mode = "REVERSE"} else{TRANSMISSION_MODE = "NEUTRAL"} #I guess this is how I do this?
+
+                if(!Mouse_Steer) {AD = Operator:keyPressed(RenKL_KEYS["LEFT",string])-Operator:keyPressed(RenKL_KEYS["RIGHT",string])} #If we're not using mouse steer use the usual left/right keys
+                
+                if((Saftey&(Key == RenKL_KEYS["BREAKS",string]))&Pressed) {ParkingBrake = !ParkingBrake soundSwitch() operatorNotify("Parking Brake "+ACTIVATIONS[ParkingBrake,string]+".")}
+                Brakes_Applied = Operator:keyPressed(RenKL_KEYS["BREAKS",string])|ParkingBrake #We're using the Brakes if we're using the Brakes, or the parking Brake
+            break
+        }
+    }
+}
+
+elseif(clk("steering"))
+{
+    timer("steering",STEERING_FREQUENCY)
+    local Aim = Aimpos
+    if(DriverSeat:driver()) {Aim = DriverCam["HitPos",vector]}
+    if(Mouse_Steer) {AD = clamp(((-BASE:bearing(Aim)*LastWS)/(MAXSTEERANGLE*(SLAVEUSE+1))),-1,1)}
+
+    Steering_Input += clamp(AD-Steering_Input,-INPUTSMOOTHER,INPUTSMOOTHER)
+
+    BaseAng = BASE:angles()
+
+    Clutch = Brakes_Applied|(RPM < Powerband[2])
+    Brake = Brakes_Applied*BRAKEFORCE
+
+    if(SLAVEUSE)
+    {
+        local DesiredAng = MAXSTEERANGLE*Steering_Input
+
+        local SlaveAng = ang(0,clamp(DesiredAng,-MAXSTEERANGLE,MAXSTEERANGLE),0)
+
+        if(F1) {F1:setAng(BaseAng+SlaveAng)}
+        if(F2) {F2:setAng(BaseAng+(SlaveAng/MIDDLESTEERDIVISOR))}
+        if(R1) {R1:setAng(BaseAng-(SlaveAng/MIDDLESTEERDIVISOR))}
+        if(R2) {R2:setAng(BaseAng-SlaveAng)}
+
+        if(!F1:isFrozen())
+        {
+            F1:propFreeze(1)
+            F2:propFreeze(1)
+            R1:propFreeze(1)
+            R2:propFreeze(1)
+        }
+    }
+
+    if(TYPE)
+    {
+        BaseAngVel = BASE:angVel()
+
+        local TrackError = ((Steering_Input*MAXYAWVEL)-(BaseAngVel:yaw()*LastWS))
+
+        local SteeringPID = steerPID(TrackError,PIDSETTING,PidState,TRACKDEADZONE)
+
+        TrackSteering = clamp(Steering_Input+SteeringPID,-1,1)
+
+        CrossLatch = (abs(TrackSteering) < 0.05) & (abs($TrackSteering) < 0.1)
+
+        if(CrossLatch)
+        {
+            LeftClutch=RightClutch = Clutch
+            LeftBrake=RightBrake = Brake
+            LeftLatch=RightLatch = Brakes_Applied
+            SteerRate=0
+
+            if(TYPE != 3) {LeftGear=RightGear = 1}
+            else{LeftGear=RightGear = Gear}
+        }
+
+        else
+        {
+            if(Brakes_Applied)
+            {
+                if(inrange(TYPE,2,4)&abs(TrackSteering))
+                {
+                    if(inrange(TYPE,2,3)) {LeftClutch=RightClutch=LeftBrake=RightBrake=LeftLatch=RightLatch = inrange(TrackSteering,-0.125,0.125)}
+                    else{LeftClutch=Rightclutch=1 LeftBreak = 0 RightBreak = 0 LeftLatch=RightLatch = 0}
+
+                    if(TYPE == 2)
+                    {
+                        if(inrange(TrackSteering,-0.125,0.125)) {LeftGear=RightGear = 1}
+                        else{LeftGear = 1+(TrackSteering>0) RightGear = 1+(TrackSteering<0)}
+                    }
+
+                    elseif(TYPE == 3)
+                    {
+                        if(inrange(TrackSteering,-0.125,0.125)) {LeftGear=RightGear = 1}
+                        else{LeftGear = 1+(TrackSteering>0) RightGear = 1+(TrackSteering<0)}
+                    }
+
+                    elseif(TYPE == 4)
+                    {
+                        SteerRate = -TrackSteering
+                        LeftClutch=Rightclutch = 1
+                        LeftBrake=RightBrake = 0
+                        LeftLatch=RightLatch = 0
+                    }
+                }
+            }
+
+            else
+            {
+                LeftClutch = abs(clamp(TrackSteering,0,1))
+                RightClutch = abs(clamp(TrackSteering,-1,0))
+
+                LeftBrake = LeftClutch*BRAKEFORCE
+                RightBrake = RightClutch*BRAKEFORCE
+
+                LeftLatch = inrange(TrackSteering,0.9,1)
+                RightLatch = inrange(TrackSteering,-1,-0.9)
+
+                if(TYPE != 3) {LeftGear=RightGear = 1}
+                else{LeftGear=RightGear = Gear}
+            }
+        }
+    }
+}
+
+elseif(clk("gearing"))
+{
+    timer("gearing",GEARING_FREQUENCY)
+
+    RPM = Engines[1,entity]:acfRPM()
+
+    Gear += evalShift(Gear,RPM,Powerband[2],Powerband[3],Powerband[4],ThrottleLock ? LastWS : WS,GEARRATIOS,ISCVT,Throttle,0,BASE:angles():pitch())
+}
+
+elseif(clk("misc"))
+{
+    timer("misc",MISC_FREQUENCY)
+
+    soundVolume("eidle",clamp((Powerband[1]/RPM),0,1),1)
+
+    if(Gearbox:isValid())
+    {
+        if(changed(Gear)) {Gearbox:soundPlay("mgear",0.3,"acf_extra/vehiclefx/trans/default_shift.wav") soundVolume("mgear",0.5)}
+        TransPitch:gearboxSoundUpdate("whine",RPM,Powerband[4],Clutch)
+    }
+
+    if(inrange(TYPE,2,3))
+    {
+        if(LeftGearbox:isValid()&changed(LeftGear)) {Gearbox:soundPlay("lgear",0.3,"acf_extra/vehiclefx/trans/default_shift.wav") soundVolume("lgear",0.5)}
+        if(RightGearbox:isValid()&changed(RightGear)) {Gearbox:soundPlay("rgear",0.3,"acf_extra/vehiclefx/trans/default_shift.wav") soundVolume("rgear",0.5)}
+    }
+
+    tbss_update((TYPE==0)|F1:isValid(),curtime(),abs(Velocity:length()))
+
+    Speed_Ratio = clamp(toUnit("km/h",Velocity:length())/MAXSPEED,0,1)
+
+    if(GOVERNORMODE) {Governor = Governor:pidSpeedGovernor(toUnit("km/h",Velocity:length()),MAXSPEED,MISC_FREQUENCY,GOVERNORSETTING)}
+    local Adjust = (Governor[1,number] < 0) ? clamp(abs(Governor[1,number]),0,1) : 0
+    if(TYPE) {Throttle = ((WS|AD|ThrottleLock)-Adjust)*100} else{Throttle = ((WS|ThrottleLock)-Adjust)*100}
+
+    msgBusOut()
+}
+
+elseif(clk("check"))
+{
+    timer("check",CHECK_FREQUENCY)
+    local NewEngineCount = 0
+    for(C=1,Engines:count()) {if(Engines[C,entity]:isValid()) {NewEngineCount++} else{Engines:removeEntity(C)}}
+    if(NewEngineCount < EngineCount)
+    {
+        soundExplode() operatorNotify("Engine destroyed!")
+        local NewEngine = Engines[1,entity]
+        if(Engines[1,entity]:isValid()) {Engines[1,entity]:updateInfo()} else{operatorNotify("Mobility disabled!")}
+    }
+    EngineCount = NewEngineCount
+}
+
+elseif(clk("operator_query"))
+{
+    timer("operator_query",(Operator) ? (OPERATOR_QUERY_FREQUENCY) : (OPERATOR_QUERY_FREQUENCY >> 1))
+    if(DriverSeat:driver()) {Operator = DriverSeat:driver()}
+    elseif(Gunner) {Operator = Gunner}
+    else{Operator = noentity()}
+    if(changed(Operator)) {DriverCam["Activated",number] = DriverCamActive&DriverSeat:driver():isPlayer()}
+}

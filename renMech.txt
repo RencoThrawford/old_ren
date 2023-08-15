@@ -1,0 +1,85 @@
+@name renMech
+@inputs [MSGBUS]:table
+@inputs [LeftHip]:entity [LeftKnee]:entity [LeftFoot]:entity
+@inputs [RightHip]:entity [RightKnee]:entity [RightFoot]:entity
+@inputs [LeftTarget RightTarget]:vector
+@persist [IK_FREQUENCY]:number
+@outputs [LEGS]:table
+@trigger [MSGBUS]
+
+if(first())
+{
+    local Index = 0
+
+    #include "renMechLib"
+    
+    holoCreate(Index,LeftHip:pos(),vec(1),ang(0),vec4(255),"models/sprops/misc/origin.mdl")
+    holoParent(Index,entity())
+    local LeftHipRef = Index
+    Index++
+
+    local LeftHipKneeDist = LeftHip:pos():distance(LeftKnee:pos())
+    holoCreate(Index,holoEntity(LeftHipRef):toWorld(vec(0,0,LeftHipKneeDist)),vec(1),ang(0),vec4(255),"models/sprops/misc/origin.mdl")
+    holoParent(Index,LeftHipRef)
+    local LeftKneeRef = Index
+    Index++
+
+    local LeftKneeFootDist = LeftKnee:pos():distance(LeftFoot:pos())
+    holoCreate(Index,holoEntity(LeftKneeRef):toWorld(vec(0,0,LeftKneeFootDist)),vec(1),ang(0),vec4(255),"models/sprops/misc/origin.mdl")
+    holoParent(Index,LeftKneeRef)
+    local LeftFootRef = Index
+    Index++
+    
+    
+    holoCreate(Index,RightHip:pos(),vec(1),ang(0),vec4(255),"models/sprops/misc/origin.mdl")
+    holoParent(Index,entity())
+    local RightHipRef = Index
+    Index++
+
+    local RightHipKneeDist = RightHip:pos():distance(RightKnee:pos())
+    holoCreate(Index,holoEntity(RightHipRef):toWorld(vec(0,0,RightHipKneeDist)),vec(1),ang(0),vec4(255),"models/sprops/misc/origin.mdl")
+    holoParent(Index,RightHipRef)
+    local RightKneeRef = Index
+    Index++
+
+    local RightKneeFootDist = RightKnee:pos():distance(RightFoot:pos())
+    holoCreate(Index,holoEntity(RightKneeRef):toWorld(vec(0,0,RightKneeFootDist)),vec(1),ang(0),vec4(255),"models/sprops/misc/origin.mdl")
+    holoParent(Index,RightKneeRef)
+    local RightFootRef = Index
+    Index++
+    
+    LEGS = table()
+
+    LEGS:pushArray(array(LeftHipRef,LeftKneeRef,LeftFootRef,LeftHipKneeDist,LeftKneeFootDist,1,entity()))
+    LEGS:pushArray(array(RightHipRef,RightKneeRef,RightFootRef,RightHipKneeDist,RightKneeFootDist,1,entity()))
+    
+    IK_FREQUENCY = 60
+    
+    print(LEGS[1,array])
+    
+    timer("ik",IK_FREQUENCY)
+    
+    quat_ik(LeftHipRef,LeftKneeRef,LeftFootRef,LeftHipKneeDist,LeftKneeFootDist,1,entity(),LeftFoot:pos())
+    
+    LeftHip:parentTo(holoEntity(LeftHipRef))
+    LeftKnee:parentTo(holoEntity(LeftKneeRef))
+    LeftFoot:parentTo(holoEntity(LeftFootRef))
+    
+    quat_ik(RightHipRef,RightKneeRef,RightFootRef,RightHipKneeDist,RightKneeFootDist,1,entity(),RightFoot:pos())
+    
+    RightHip:parentTo(holoEntity(RightHipRef))
+    RightKnee:parentTo(holoEntity(RightKneeRef))
+    RightFoot:parentTo(holoEntity(RightFootRef))
+}
+
+elseif(clk("ik"))
+{
+    timer("ik",IK_FREQUENCY)
+    #function quat_ik(NHip:number,NKnee:number,NFoot:number,LengthA:number,LengthB:number,ReverseKnee:number,Base:entity,Target:vector)
+    local Targets = array(LeftTarget,RightTarget)
+    for(L=1,LEGS:count())
+    {
+        local CurArray = LEGS[L,array]
+        quat_ik(CurArray[1,number],CurArray[2,number],CurArray[3,number],CurArray[4,number],CurArray[5,number],CurArray[6,number],CurArray[7,entity],Targets[L,vector])
+    }
+}

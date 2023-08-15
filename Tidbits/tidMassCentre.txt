@@ -1,0 +1,154 @@
+@name tidMassCentre
+@inputs [Entities]:array #Normal Inputs
+@persist [CENTRE_FREQUENCY]:number #Frequencies
+@persist [REFCENTRE]:number [VERSION]:string #Global Variables
+@trigger none
+@model models/props_lab/reciever01d.mdl
+#[
+E2 By:
+    Renco - Nearly Everything
+    Whoever wrote the original mass centre function - Mass Centre function
+
+!!!!!
+REALLY DO-NOT RE-DISTRIBUTE!
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+Visualizes the mass centre of an array of entites by:
+    Using an adv. E marker wired to Entities on this E2
+        E2 Entities -> Adv.EMarker Entities
+    Placing it on your thing
+        (Will only use entities with welds and axises (Shit that has effect when parented still, use the emarker to get everything))
+
+
+
+//////////VERSION LOG\\\\\\\\\\
+V0.0.0 (01-24-21) - Initial Development
+V1.0.0 (01-24-21) - Functionally complete
+]#
+
+
+#//////////INITIALIZATION\\\\\\\\\\#
+#Reset the E2 if we have been duped or the dupe has finished spawning
+if(duped()|dupefinished()) {reset()}
+
+#Memories Lie
+if(first())
+{
+    #/////SETTINGS\\\\\#
+    #//MISC\\#
+    #Changes at what index the holograms will start to spawn at
+    local Index = 0 #Default: 0
+
+
+
+    #/////INITIALIZE VARIABLES\\\\\#
+    #//FREQUENCIES\\#
+    #Updates the position and angle of the centre marker
+    CENTRE_FREQUENCY = 50 #Default: 50
+
+
+
+    #/////HOLOGRAMS\\\\\#
+    #Centre
+    local Centre = holoCreate(Index,entity():pos(),vec(1),entity():angles(),vec4(255,255,0,200),"sphere")
+    REFCENTRE = Index
+    Index++
+
+    #Y
+    holoCreate(Index,Centre:toWorld(vec(0)),vec(0.15,10,0.15),Centre:toWorld(ang(0)),vec4(250,100,100,255),"cube")
+    holoParent(Index,REFCENTRE)
+    Index++
+
+    #Y Arrow
+    holoCreate(Index,Centre:toWorld(vec(0,61.5,0)),vec(0.25),Centre:toWorld(ang(0,0,-90)),vec4(250,100,100,255),"pyramid")
+    holoParent(Index,REFCENTRE)
+    Index++
+
+    #X
+    holoCreate(Index,Centre:toWorld(vec(0)),vec(10,0.15,0.15),Centre:toWorld(ang(0)),vec4(100,250,100,255),"cube")
+    holoParent(Index,REFCENTRE)
+    Index++
+
+    #X Arrow
+    holoCreate(Index,Centre:toWorld(vec(61.5,0,0)),vec(0.25),Centre:toWorld(ang(90,0,0)),vec4(100,250,100,255),"pyramid")
+    holoParent(Index,REFCENTRE)
+    Index++
+
+    #Z
+    holoCreate(Index,Centre:toWorld(vec(0)),vec(0.15,0.15,10),Centre:toWorld(ang(0)),vec4(100,100,250,255),"cube")
+    holoParent(Index,REFCENTRE)
+    Index++
+
+    #Z Arrow
+    holoCreate(Index,Centre:toWorld(vec(0,0,61.5)),vec(0.25),Centre:toWorld(ang(0,-90,0)),vec4(100,100,250,255),"pyramid")
+    holoParent(Index,REFCENTRE)
+    Index++
+
+
+
+    #/////FUNCTIONS\\\\\#
+    #[Returns a world vector of the mass centre of an array of entities
+    Inputs:
+        [ARRAY] - Array of entities
+    Return:
+        [VECTOR] - World position of the mass centre of the array of entities
+    ]#
+    function vector array:massCenter()
+    {
+        local Mass = 0
+        local Centre = vec(0)
+        foreach(I,E:entity = This)
+        {
+            Mass += E:mass()
+            Centre += E:massCenter()*E:mass()
+        }
+        return Centre/Mass
+    }
+
+    #[Sorts through an array to remove anything that dosent have welds or axis constraints
+    Inputs:
+        [ARRAY] - Array of entities()
+    Return:
+        [ARRAY] - Array free of entities withouth welds and or axises
+    ]#
+    function array array:arraySort()
+    {
+        local Return = This
+        foreach(K,E:entity = This)
+        {
+            if((!E:hasConstraints("weld"))&(!E:hasConstraints("axis"))) {Return:removeEntity(K)}
+        }
+        return Return
+    }
+
+    #[Simple function to update the centre hologram's position (Mass Centre) and angle (First entrie's angle)
+    Inputs:
+        Ents [ARRAY] - Array of entities
+    ]#
+    function void updateCentre(Ents:array) {holoPos(REFCENTRE,Ents:massCenter()),holoAng(REFCENTRE,Ents[1,entity]:angles())}
+
+
+
+    #/////FINALIZE\\\\\#
+    #//VERSION\\#
+    VERSION = "V1.0.0"
+    setName("tidMassCentre "+VERSION)
+
+    #//TIMERS\\#
+    timer("centre",CENTRE_FREQUENCY)
+}
+
+
+
+#//////////CENTRE UPDATE\\\\\\\\\\#
+elseif(clk("centre"))
+{
+    timer("centre",CENTRE_FREQUENCY)
+
+    #If we have Entities wired (->Input/Output), do the mass centre on that instead of getting constraints
+    if(->Entities) {updateCentre(Entities)}
+    else{updateCentre(entity():isWeldedTo():getConstraints():arraySort())}
+}

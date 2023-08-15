@@ -1,0 +1,64 @@
+@name renRadar
+@inputs [Active]:number #Normal Inputs
+@persist [SPEED SOUNDVOLUME]:number #User Settings
+@persist [RADARREF]:number #Global Variables
+@trigger [Active]
+#[
+E2 By:
+    Renco - Everything
+    Baron - Idea
+
+
+!!!!!
+RE-DISTRIBUTE I GUESS
+!!!!!
+]#
+
+
+#Reset the E2 if we have been duped or the dupe has finished spawning
+if(duped()|dupefinished()) {reset()}
+
+#Who wants to live forever?
+if(first())
+{
+    #/////SETTINGS\\\\\#
+    #Speed at which the radar spins when active
+    SPEED = 0.25 #Default: 0.25
+
+    #Index at which the holograms will start to spawn at
+    local Index = 0 #Default: 0
+
+    #Scale of the radar
+    local Scale = vec(1) #Default: vec(1)
+    
+    #Turns on/off the base if you dont want it
+    local Base = 1 #Default: 1
+    
+    #Turns on/off the sound if you dont want it
+    local Sound = 1 #Default: 1
+
+    #Changes the volume of the sound when active
+    SOUNDVOLUME = 0.5 #Default: 0.5
+
+
+
+    #/////HOLOGRAMS\\\\\#
+    holoCreate(Index,entity():toWorld(vec(0)),Scale,entity():toWorld(ang(0)),vec4(255),"models/radar/radar_sp_mid.mdl")
+    holoParent(Index,entity())
+    #ifdef holoBoneScale(number,string,vector)
+        holoBoneScale(Index,"radar_stand",vec(Base))
+    #endif
+    RADARREF = Index
+    Index++
+
+
+
+    #/////FINALIZATION\\\\\#
+    if(Sound) {entity():soundPlay("radar",0,"ambient/machines/city_ventpump_loop1.wav") soundVolume("radar",Active)}
+}
+
+elseif(inputClk())
+{
+    holoAnim(RADARREF,0,0,Active ? SPEED : 0)
+    soundVolume("radar",Active*SOUNDVOLUME)
+}

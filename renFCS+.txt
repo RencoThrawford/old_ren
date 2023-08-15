@@ -1,0 +1,261 @@
+@name renFCS+
+@inputs [MSGBUS]:table
+@persist [Power_On Lead_On Drift_On Parabolic_Mode Weapons_Free Range]:number [Current_Gun]:entity [Target_Pos Target_Vel Current_Vel]:vector #MSGBUS Inputs
+@persist [Flight_Time]:number [Solution]:vector [Current_Table]:table #MSGBUS Outputs
+@persist [VERSION]:string [STATUSES]:array #Global Variables
+@persist [IDLE_FREQUENCY ACTIVE_FREQUENCY MISC_FREQUENCY]:number #Frequencies
+@persist [Active CurDragCoeff CurMuzzleVel CurMaxRange GLATGMOverride]:number [RawSolution]:array #"Runtime" Variables
+@trigger [MSGBUS]
+@model models/props_lab/reciever01d.mdl
+#[
+E2 By:
+    Renco - Put it all together
+    Red - Ballistics library
+
+!!!!!
+!!!!!SERIOUSLY DO NOT RE-DISTRIBUTE!!!!!
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+This E2 really does the ballistics
+
+
+
+//////////VERSION LOG\\\\\\\\\
+V0.0.0 (10-23-20) - Initial Devlopment
+V1.0.0 (10-23-20) - Functionally Complete?
+V1.0.1 (12-10-20) -
+    [REMOVED] Removed table being overwritten when E2 is destroyed (For future backup sight)
+    [FIXED] Fixed not overwriting ballistic sollution and flight time when E2 is destroyed
+    [FIXED] Ported name fix from renFCS <V0.0.1>
+V1.0.2 (12-26-20) -
+    [FIXED] Fixed undocumented issues
+    [FIXED] Fixed some important things not being build upon gun/ammunition switch
+
+
+
+//////////TO-DO\\\\\\\\\\
+
+/////DONE\\\\\
+
+
+
+//////////MSGBUS\\\\\\\\\\
+/////MSGBUS INPUTS\\\\\
+BALLISTIC_COMPUTER_POWER_ON [NUMBER]  - If compute ballistic solution
+BALLISTIC_COMPUTER_LEAD_ON  [NUMBER]  - If target leading is on
+BALLISTIC_COMPUTER_DRIFT_ON [NUMBER]  - If drift compensation is on
+BALLISTIC_COMPUTER_PARABOLIC_MODE [NUMBER] - If mortar mode is on
+MAIN_GUN_SELECTED           [ENTITY]  - Currently selected gun for ballistics
+AIMPOS                      [VECTOR3] - Target position
+TARGET_SPEED                [VECTOR3] - Target velocity for leading
+VELOCITY                    [VECTOR3] - Current vehicle velocity for drift
+WEAPONS_FREE                [NUMBER]  - If the weapons are free
+RANGE                       [NUMBER]  - Current range
+
+/////MSGBUS OUTPUTS\\\\\
+MAIN_GUN_SELECTED_BALLISTIC_SOLUTION [VECTOR3] - Ballistic Solution to add to aimpos
+MAIN_GUN_SELECTED_FLIGHT_TIME        [NUMBER]  - Flight Time of the shell in seconds
+BALLISTIC_COMPUTER_TABLE             [TABLE]   - Range table of selected ammunition
+]#
+
+
+#//////////INITIALIZATION\\\\\\\\\\#
+#Reset the E2 if we have been duped or the dupe has finished spawning
+if(duped()|dupefinished()) {reset()}
+
+#Ballistics time!
+if(first())
+{
+    #/////SETTINGS\\\\\#
+    #//BALLISTICS\\#
+    #If you have selected a rack, we will use this range table
+    ROCKETRANGETABLE = table() #Default: table()
+
+
+    #//MISC\\#
+    #Changes at what index the holograms for the display will start spawning at
+    local Index = 0 #Default: 0
+
+
+
+    #/////LIBRARIES\\\\\#
+    #include "renFCSLib"
+    #include "BallisticLib-C"
+
+
+
+    #/////INITIALIZE VARIABLES\\\\\#
+    #//FREQUENCIES\\#
+    IDLE_FREQUENCY   = 1000 #Default: 1000 Runs the ballistics way slower
+    ACTIVE_FREQUENCY = 150  #Default: 150  Runs the ballistics way faster
+    MISC_FREQUENCY   = 1500 #Default: 1500 Updating the display because it's quite intesive
+
+    #//GLOBAL VARIABLES\\#
+    STATUSES[0,string] = "IDLE" STATUSES[1,string] = "ACTIVE"
+
+
+
+    #/////HOLOGRAMS\\\\\#
+    Index = Index:renFCSLCreateDisplay()
+
+
+
+
+    #/////FUNCTIONS\\\\\#
+    #Get the things from the bus thing
+    function void msgBusIn()
+    {
+        if(->MSGBUS)
+        {
+            Power_On       = MSGBUS["BALLISTIC_COMPUTER_POWER_ON",number]
+            Lead_On        = MSGBUS["BALLISTIC_COMPUTER_LEAD_ON",number]
+            Drift_On       = MSGBUS["BALLISTIC_COMPUTER_DRIFT_ON",number]
+            Parabolic_Mode = MSGBUS["BALLISTIC_COMPUTER_PARABOLIC_MODE",number]
+            Current_Gun    = MSGBUS["MAIN_GUN_SELECTED",entity]
+            Target_Pos     = MSGBUS["AIMPOS",vector]
+            Target_Vel     = MSGBUS["TARGET_SPEED",vector]
+            Current_Vel    = MSGBUS["VELOCITY",vector]
+            Weapons_Free   = MSGBUS["WEAPONS_FREE",number]
+            Range          = MSGBUS["RANGE",number]
+        }
+    }
+
+    #We don't want the things anymore
+    function void msgBusOut()
+    {
+        if(->MSGBUS)
+        {
+            MSGBUS["MAIN_GUN_SELECTED_BALLISTIC_SOLUTION",vector] = Solution
+            MSGBUS["MAIN_GUN_SELECTED_FLIGHT_TIME",number]        = Flight_Time
+            MSGBUS["BALLISTIC_COMPUTER_TABLE",table]              = Current_Table
+        }
+    }
+
+
+
+    #/////FINALIZE\\\\\#
+    #//MISC\\#
+    runOnLast(1)
+    
+
+    #//VERSION\\#
+    VERSION = "V1.0.2"
+    setName("renFCS+ "+VERSION)
+    timer("ballistics_update",IDLE_FREQUENCY)
+
+    #//FINALIZE MSGBUS\\#
+    #Push the name of the E2 to the bus
+    MSGBUS["NODE_NAMES",array]:pushString(entity():getName())
+
+    #Grab and push things to the bus
+    msgBusIn()
+    msgBusOut()
+}
+
+
+
+#The MSGBUS has updated, update what we have
+elseif(inputClk())
+{
+    msgBusIn()
+
+    #Determine if we're going to run or not
+    if(changed(Power_On)|changed(Weapons_Free))
+    {
+        Active = (Power_On & Weapons_Free)
+    
+        setName("renFCS+ "+VERSION+"\n"+
+        STATUSES[Active,string]+": "+(Active ? ACTIVE_FREQUENCY : IDLE_FREQUENCY)+"ms")
+    
+        if(Active) {timer("misc_update",100)}
+    }
+
+    #Update precached stuff on gun/ammunition change
+    if(changed(Current_Gun)|changed(Current_Gun:acfMuzzleVel()))
+    {
+        #Used to determine what to update
+        CurMuzzleVel = Current_Gun:acfMuzzleVel()
+        GLATGMOverride = (Current_Gun:acfAmmoType()=="GLATGM")
+    
+        #We're using a missile rack or somthing, use the user set rocket range table
+        if(CurMuzzleVel == -1)
+        {
+            Current_Table = ROCKETRANGETABLE
+        }
+    
+        #Update all the precached stuff if we don't have a glatgm loaded
+        elseif(!GLATGMOverride)
+        {
+            Current_Table = blib_buildGunRangeTable(Current_Gun)
+            CurDragCoeff = blib_calcDragCoef(Current_Gun)
+            CurMaxRange  = blib_maxRange(Current_Gun)
+        }
+    }
+}
+
+
+
+#Main ballistics loop
+elseif(clk("ballistics_update"))
+{
+    timer("ballistics_update",Active ? ACTIVE_FREQUENCY : IDLE_FREQUENCY)
+
+    local GUNPOSITION = Current_Gun:massCenter()
+
+    #If we're using GLATGM's, just aim directly where we're aiming
+    if(GLATGMOverride)
+    {
+        RawSolution = array(vec(),0)
+    }
+
+    #Or if we're in parabolic mode, do that
+    elseif(Parabolic_Mode)
+    {
+        RawSolution = blib_calcParabolicSolution(GUNPOSITION,Target_Pos,Target_Vel,Current_Vel,CurMuzzleVel,CurDragCoeff,CurMaxRange)
+    }
+
+    #Missile
+    elseif(CurMuzzleVel == -1)
+    {
+        RawSolution = blib_calcMissileSolution(GUNPOSITION,Target_Pos,Target_Vel,Current_Vel,ROCKETRANGETABLE)
+    }
+
+    #Regular Ballistics
+    else
+    {
+        RawSolution = blib_calcDirectSolution(GUNPOSITION,Target_Pos,Target_Vel,Current_Vel,Current_Table,CurMuzzleVel,CurDragCoeff)
+    }
+
+    Solution = RawSolution[1,vector] #+DeltaTarget
+    Flight_Time = RawSolution[2,number]
+
+    msgBusOut()
+}
+
+
+
+#Update the display
+elseif(clk("misc_update"))
+{
+    if(Active) {timer("misc_update",MISC_FREQUENCY)}
+
+    renFCSLUpdateDisplay(Range,Active)
+}
+
+
+
+#Update the MSGBUS with blank data upon E2 destruction (Hopefully)
+elseif(last())
+{
+    Solution = vec(0)
+    Flight_Time = 0
+
+    msgBusOut()
+}
+
+
+
+

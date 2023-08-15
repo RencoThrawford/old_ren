@@ -1,0 +1,46 @@
+@name renMSGBUSDebugger
+#[
+E2 By:
+    Renco - Just about everything
+    Red - MSGBUS
+
+!!!!!
+DO-NOT RE-DISTRIBUTE!
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+Visualization of parts of the MSGBUS system such as detected engines, aimpos, velocity and more
+EGP is optional, shows more information
+
+
+
+//////////VERSION LOG\\\\\\\\\\
+V0.0.0 (10-20-20) - Initial Development
+
+
+
+//////////TO-DO\\\\\\\\\\
+
+/////DONE\\\\\
+
+
+
+//////////MSGBUS\\\\\\\\\\
+/////MSGBUS INPUTS\\\\\
+
+
+/////MSGBUS OUTPUTS\\\\\
+]#
+
+
+#//////////INITIALIZATION\\\\\\\\\#
+#Reset the E2 if we have been duped or the dupe has finished spawning
+if (duped()|dupefinished()) {reset()}
+
+#Woowoo
+if(first())
+{
+
+}

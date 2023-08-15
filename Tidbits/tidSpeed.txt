@@ -1,0 +1,82 @@
+@name tidSpeed
+@inputs [Entity]:entity #Regular Inputs
+@outputs [Velocity]:vector [MPH KMH MS]:number #Regular Outputs
+@persist [SPEED_FREQUENCY]:number #Frequencies
+@persist [VERSION]:string #Global Variables
+@trigger none
+@model models/props_lab/reciever01d.mdl
+#[
+E2 By:
+    Renco - Everything
+
+!!!!!
+REALLY DO-NOT RE-DISTRIBUTE!
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+A simple speedometer that outputs the velocity, Miles Per Hour, Kilometers Per Hour, and Meters Per Second by:
+    Wiring Entity on the E2 to somthing you wish to monitor the speed for
+        E2 Entity -> entity on a prop or somthing (It makes the output on the prop when you try to do this)
+    Using the E2 itself
+        Place it on somthing
+
+
+
+//////////VERSION LOG\\\\\\\\\\
+V0.0.0 (01-24-21) - Initial Development
+V1.0.0 (01-24-21) - Functionally complete
+]#
+
+
+#//////////INITIALIZATION\\\\\\\\\\#
+#Reset the E2 if we have been duped or the dupe has finished spawning
+if(duped()|dupefinished()) {reset()}
+
+#Feel like an atom bomb
+if(first())
+{
+    #/////INITIALIZE VARIABLES\\\\\#
+    #//FREQUENCIES\\#
+    #Updates the outputs
+    SPEED_FREQUENCY = 50 #Default: 50
+
+
+
+    #/////FUNCTIONS\\\\\#
+    #[Converts velocity to a vector of speeds
+    Inputs:
+        Vel [VECTOR] - Velocity
+    Return:
+        [VECTOR] - vec(MPH,KMH,M/S)
+    ]#
+    function vector speedConvert(Vel:vector) {local Speed = Vel:length(),return vec(toUnit("mph",Speed),toUnit("km/h",Speed),Speed/39.37)}
+
+
+
+    #/////FINALIZE\\\\\#
+    #//VERSION\\#
+    VERSION = "V1.0.0"
+    setName("tidSpeed "+VERSION)
+
+    #//TIMERS\\#
+    timer("speed",SPEED_FREQUENCY)
+}
+
+
+
+#//////////SPEED UPDATE\\\\\\\\\\#
+elseif(clk("speed"))
+{
+    timer("speed",SPEED_FREQUENCY)
+
+    #If we have entity wired (->Input/Output), use that for velocity, otherwise use the E2
+    if(->Entity) {Velocity = Entity:vel()} else{Velocity = entity():vel()}
+
+    #Convert the velocity to speeds
+    local Convert = speedConvert(Velocity)
+    MPH = Convert[1]
+    KMH = Convert[2]
+    MS = Convert[3]
+}

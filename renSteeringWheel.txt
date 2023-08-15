@@ -1,0 +1,151 @@
+@name renSteeringWheel
+@inputs [MSGBUS]:table
+@outputs [Steering_Input]:number
+@outputs [VERSION]:string [STEERINGWHEELS]:table #Global Variables
+@trigger [MSGBUS]
+@model models/sprops/cylinders/size_2/cylinder_3x3.mdl
+#[
+E2 By:
+    Renco - Everything
+
+!!!!!
+REALLY DO-NOT RE-DISTRIBUTE!
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+A simple E2 that reads the steering input from the bus and visualizes it with a holographic steering wheel
+
+
+
+//////////VERSION LOG\\\\\\\\\\
+V0.0.0 (01-07-21) - Initial Devlopment
+V1.0.0 (01-07-21) - Basic functionality compelted
+
+
+
+//////////TO-DO\\\\\\\\\\
+
+/////DONE\\\\\
+
+
+
+//////////MSGBUS\\\\\\\\\\
+/////MSGBUS INPUTS\\\\\
+STEERING_INPUT [NUMBER] - -1 to 1 of current steering input
+
+////MSGBUS OUTPUTS\\\\\
+]#
+
+#//////////INITIALIZATION\\\\\\\\\#
+#Reset the E2 if we have been duped or the dupe has finished spawning
+if (duped()|dupefinished()) {reset()}
+
+#(SCREAMING)#
+if(first())
+{
+    #/////SETTINGS\\\\\#
+    #//LOOKS\\#
+    #Changes what model of steering wheel to use
+    local WheelIndex = 6 #Default: 6
+
+    #Changes what skin the steering wheel will use
+    local SkinIndex = 0 #Default: 0
+
+    #Changes the color/material of the E2
+    local Camo = "yellow" #Default: "yellow"
+
+    #Changes the material of the E2 if the camo color dosent do materials
+    local CamoMat = "" #Default: ""
+
+
+    #//MISC\\#
+    #Change the index at which hologam spawn at
+    local Index = 0 #Default: 0
+
+
+
+    #/////LIBRARIES\\\\\#
+    #include "renHoloCamoLib"
+
+
+
+    #/////FUNCTIONS\\\\\#
+    #[Creates a steering wheel on the given entity
+    Inputs:
+        [ENTITY] - The entity the steering wheel will be created for
+        HoloIndex [NUMBER] - The starting hologram index that will be used
+        WheelIndex [NUMBER] - The model of the steering wheel to be used
+        SkinIndex [NUMBER] - The skin of the steering wheel
+    Return:
+        [NUMBER] - Returns the last index used +1 (If any holograms were spawned at all)
+    ]#
+    function number entity:steeringWheelCreate(HoloIndex:number,WheelIndex:number,SkinIndex:number)
+    {
+        local Index = HoloIndex
+        switch(This:model())
+        {
+            case "models/sprops/cylinders/size_2/cylinder_3x3.mdl",
+                holoCreate(Index,This:toWorld(vec(0,0,1)),vec(1),This:toWorld(ang(-90,0,0)),vec4(255),"models/sprops/trans/stwheels/stwheel_"+WheelIndex+".mdl")
+                holoParent(Index,This)
+                STEERINGWHEELS:pushArray(array(Index,This,ang(-90,0,0)))
+                Index++
+            break
+        }
+        return Index
+    }
+
+    #[Moves all steering wheels that have been created
+    Inputs:
+        AD [NUMBER] - -1 to 1 of current steering input
+    ]#
+    function void steeringWheelMove(AD:number)
+    {
+        for(K=1,STEERINGWHEELS:count())
+        {
+            local SteeringWheel = STEERINGWHEELS[K,array]
+            local Index = SteeringWheel[1,number]
+            local Parent = SteeringWheel[2,entity]
+            local AngOffset = SteeringWheel[3,angle]
+            holoAng(Index,Parent:toWorld(AngOffset+ang(0,AD*90,0)))
+        }
+    }
+
+    #[Grabs stuff from the MSGBUS
+    ]#
+    function void msgBusIn()
+    {
+        if(->MSGBUS)
+        {
+            Steering_Input = MSGBUS["STEERING_INPUT",number]
+        }
+    }
+
+
+
+    #/////HOLOGRAMS\\\\\#
+    Index = entity():steeringWheelCreate(Index,WheelIndex,SkinIndex)
+
+
+
+    #/////FINALIZE\\\\\#
+    #//MISC\\#
+    renHCLE2(Camo,CamoMat)
+
+    #//VERSION\\#
+    VERSION = "V1.0.0"
+    setName("renSteeringWheel "+VERSION)
+
+    #//FINALIZE MSGBUS\\#
+    #Push the name of this E2 to the bus
+    MSGBUS["NODE_NAMES",array]:pushString(entity():getName())
+    msgBusIn()
+    
+}
+
+elseif(inputClk())
+{
+    msgBusIn()
+    steeringWheelMove(Steering_Input)
+}

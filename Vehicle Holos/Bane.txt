@@ -1,0 +1,91 @@
+@name Bane Holos
+@inputs [MSGBUS]:table [Base Hatch]:entity [FireI]:number
+@outputs [FireO]:number
+@persist [HATCH_FREQUENCY]:number
+@persist [MAXRATE DEBUG]:number
+@persist [Weapons_Free]:number [Gunner]:entity
+@persist [HATCHPARENTREF]:number [HATCHORIGIN]:vector
+@persist [Rate Step]:number
+@trigger [MSGBUS] [FireI]
+#By: Renco
+if(duped()|dupefinished()) {reset()}
+
+if(first())
+{
+    MAXRATE = 0.25
+    DEBUG = 0
+    local Index = 0
+    
+
+    HATCH_FREQUENCY = 25
+
+    if(Base:isValid())
+    {
+        #Antenna
+        holoCreate(Index,Base:toWorld(vec(-70.328606,23.533695,49.299980)+vec(20.8,0,-13.001)),vec(1),Base:toWorld(ang(0)),vec4(255),"models/props_survival/jammer/jammer.mdl")
+        holoParent(Index,Base)
+        holoClipEnabled(Index,1,1)
+        holoClipEnabled(Index,2,1)
+        holoClip(Index,1,vec(0,0,13),vec(0,0,1),0)
+        holoClip(Index,2,vec(-33,0,0),vec(-1,0,1),0)
+        Index++
+
+        if(Hatch:isValid())
+        {
+            #Hatch parent reference
+            if(DEBUG) {holoCreate(Index,Base:toWorld(vec(-18.526854,0.000002,43.001480)),vec(1),Base:toWorld(ang(0,90,-90)),vec4(255),"models/sprops/geometry/t_fdisc_36.mdl")}
+            else{holoCreate(Index,Base:toWorld(vec(-18.526854,0.000002,43.001480)),vec(0),Base:toWorld(ang(0,90,-90)),vec4(0),"cube")}
+            holoParent(Index,Base)
+            HATCHPARENTREF = Index
+            HATCHORIGIN = vec(-18.526854,0.000002,43.001480)
+            Index++
+        }
+    }
+
+    function void msgBusIn()
+    {
+        if(->MSGBUS)
+        {
+            Weapons_Free = MSGBUS["WEAPONS_FREE",number]
+            Gunner = MSGBUS["GUNNER",entity]
+        }
+    }
+
+    runOnLast(1)
+
+    msgBusIn()
+
+    MSGBUS["NODE_NAMES",array]:pushString(entity():getName())
+}
+
+elseif(inputClk())
+{
+    if(changed(FireI)) {if(Step>15) {FireO = FireI} else{FireO = 0}}
+    else
+    {
+        msgBusIn()
+
+        if(changed(Weapons_Free)) 
+        {
+            timer("hatch",HATCH_FREQUENCY)
+            Rate = (Weapons_Free ? MAXRATE : -MAXRATE) 
+            Hatch:soundPlay("hatch_moving",0,"physics/metal/metal_box_scrape_smooth_loop1.wav")
+        }
+
+        #Parent if we found a gunner
+        if(changed(Gunner)&Gunner:isPlayer()) {if((Hatch:parent() != holoEntity(HATCHPARENTREF))&(!DEBUG)) {Hatch:parentTo(holoEntity(HATCHPARENTREF)) Hatch:soundPlay("hatch_parent",2,"ambient/energy/weld1.wav")}}
+    }
+}
+
+elseif(clk("hatch"))
+{
+    if(changed(FireI)) {if(Step>15) {FireO = FireI} else{FireO = 0}}
+
+    Step = clamp(Step+Rate,0,36.25)
+
+    if(changed(Step)) {timer("hatch",HATCH_FREQUENCY)} else{soundStop("hatch_moving") Hatch:soundPlay("hatch_stop",2.5,"physics/metal/metal_box_impact_soft"+randint(1,3)+".wav")}
+
+    holoPos(HATCHPARENTREF,Base:toWorld(HATCHORIGIN+vec(-clamp(Step-0.5,0,36.25),0,clamp(Step,0,0.5))))
+}
+
+if(last()) {Hatch:deparent()}

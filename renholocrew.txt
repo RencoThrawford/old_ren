@@ -1,0 +1,37 @@
+@name renHoloCrew
+@inputs [Seats]:array
+@trigger none
+@model models/nova/airboat_seat.mdl
+
+if(duped()|dupefinished()) {reset()}
+
+if(first())
+{
+    local Index = 0
+    
+    function number entity:crewCreate(HoloIndex:number)
+    {
+        local Index = HoloIndex
+        
+        switch(This:model())
+        {
+            case "models/nova/airboat_seat.mdl",
+                holoCreate(Index,This:toWorld(vec(0,15,-12)),vec(1),This:toWorld(ang(0,90,0)),vec4(255),"models/Humans/Group03/Male_0"+randint(1,9)+".mdl")
+                holoParent(Index,This)
+                holoAnim(Index,"sit_chair")
+                Index++
+            break
+        }
+        
+        return Index
+    }
+    
+    function void entity:crewDead()
+    {
+        
+    }
+    
+    Index = entity():crewCreate(Index)
+    
+    foreach(K,S:entity = Seats) {Index = S:crewCreate(Index)}
+}

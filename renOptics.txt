@@ -1,0 +1,877 @@
+@name renOptics
+@inputs [Pod Cam GFSCam]:wirelink [GunnerSeat Base]:entity [PrevWeapon NextWeapon]:number #Generic Inputs
+@outputs [MSGBUS]:table [Countermeasures]:number #Generic Outputs
+@persist [BUS_UPDATE_FREQUENCY CAMREF_FREQUENCY AIMER_FREQUENCY GUNNER_QUERY_FREQUENCY]:number [INTERROGATION_TICK]:number #Frequencies
+@persist [Flight_Time Weapons_Free Weapons_Override Fire_Plan_Exe Main_Gun_Parabolic]:number [Main_Gun Driver]:entity [Ballistic_Solution Map_Point Counter_Target Counter_Speed Drone_Target Test_Target]:vector [Range_Table]:table #MSGBUS Inputs
+@persist [Ballistics_Power_On Ballistics_Lead_On Ballistics_Drift_On Ballistics_Parabolic_On Range Fire_Command Target_Track Cam_Off FLIR Automatic_Countermeasures Curtime Rearview]:number [Gunner]:entity [Aimpos Position Velocity Target_Speed]:vector [Angle]:angle [Self Node_Listing Node_Names Node_Errors]:array #MSGBUS Outputs
+@persist [CurSource Zoom Aimer GFSActive]:number [RIFFLEData]:string [ArtyRequest]:vector [SCRLData]:array #"Runtime Variables"
+@persist [CAMREF USINGGFS]:number [CAMREFE]:entity [ACTIVATIONS SOURCES AIMERS]:array #Global Variables
+@persist [RENIFFLREC]:number #User Settings
+@trigger [PrevWeapon NextWeapon]
+@model models/xqm/button1.mdl
+runOnKeys(Gunner,1)
+#[
+E2 By:
+    Renco - Nearly Everything
+    Red - MSGBUS, Ideas
+    Fizzles - Alpha Tester
+
+!!!!!
+REALLY DO-NOT RE-DISTRIBUTE!
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+This is the "Hub" of my system, and an implementation of renOpticsLib
+
+<STATIONARY SIGHTS>
+    Wide Triangular - models/sprops/prisms/tri/size_2/tprism_6x12.mdl
+    Triangular - models/sprops/prisms/tri/size_2/tprism_6x6.mdl
+    1A40-1 - models/sprops/cuboids/height06/size_1/cube_6x12x6.mdl
+    M36E1 - models/sprops/rectangles/size_1_5/rect_6x12x3.mdl
+
+<DUAL AXIS SIGHTS>
+    Generic dual axis - models/props_phx/misc/potato_launcher_cap.mdl
+
+<AZIMUTH SIGHTS>
+    Box Sight - models/xqm/button2.mdl
+        Tiny Box Sight - models/xqm/button1.mdl
+        Large Box Sight - models/xqm/button3.mdl
+    Low Profile - models/maxofs2d/hover_plate.mdl
+
+<ELEVATION SIGHTS>
+    Ugly Sight - models/hunter/plates/plate025x025.mdl
+
+Cam Settings -
+    Coordinates local to parent - TRUE
+    Client side movement - TRUE
+    Free movement - FALSE
+    Localized movement - FALSE
+    Client side zooming - FALSE
+    Auto Un-Clip - TRUE
+    Auto un-clip ignores water - TRUE
+    Draw player - TRUE
+    Draw parent - FALSE
+
+GFSCam Settings -
+    Coordinates local to parent - FALSE
+    Client side movement - TRUE
+    Free movement - FALSE
+    Localized movement - FALSE
+    Client side zooming - FALSE
+    Auto Un-Clip - TRUE
+    Auto un-clip ignores water - TRUE
+    Draw player - TRUE
+    Draw parent - FALSE
+
+
+
+//////////VERSION LOG\\\\\\\\\\
+V0.0.0 (10-12-20) - Initial Development
+V0.0.1 (10-12-20) - Functional?
+V0.0.2 (10-25-20) - rIFFLe (IFF) integration
+V0.0.3 (10-29-20) - Implemented renOpticsLib V0.0.1; minor refactoring
+V0.0.4 (11-29-20) -
+    [UPDATED] - Updated from switching between day/night aimers to day/night/backup
+    [UPDATED] - Updated aimer update code to account for previous change
+V0.0.5 (12-07-20) -
+    [ADDED] - Chat command framework
+    [ADDED] - fs chat command, freezes/unfreezes your entire vehicle
+    [FIXED] - Fixed issue with Aimer not being destroyed when switched
+    [UPDATED] - Improved Self code to actually write to the array if no Base entity is wired
+    [UPDATED] - Updated Self code to forcibly move the Base entity to the first entry of the array
+V0.0.6 (12-11-20) -
+    [FIXED] - Fixed issue with source changing reporting wrong source
+V0.0.7 (12-13-20) -
+    [FIXED] - Numerous undocumented fixes with Fizzle's help
+V0.0.8 (12-17-20) -
+    [UPDATED] - Updated rIFFLe integration to also reply with the driver if applicable
+    [UPDATED] - Updated gunner query to work like renMobility
+    [UPDATED] - Implemented renOpticsLib V0.0.5
+    [ADDED] - Added setting to turn off interogatee notifications
+V1.0.0 (12-25-20)
+    [FIXED] Several undocumented issues
+V1.0.1 (12-26-20)
+    [FIXED] Fixed scope/aimer appearing upon vehicle re-entry
+    [FIXED] Fixed view switch not working
+    [FIXED] Fixed visibility not updating upon view switching
+V1.0.2 (12-27-20)
+    [UPDATED] Removed reduntant sight update
+    [UPDATED] Updated fs command to require a argument instead of toggling frozen state
+    [UPDATED] Simplified zoom in/out
+    [UPDATED] Ported out of vehicle input fix from renMobility
+    [FIXED] Fixed potential issue with gunner not able to use chat commands
+    [FIXED] Fixed GTMP map point not being pass through aimpos
+    [ADDED] Added bus node names print command
+V1.0.3 (12-28-20)
+    [UPDATED] Updated aimer switching code to reflect changes in renOpticsLib V0.1.0
+    [UPDATED] Updated aimer updating code to reflect changed in renOpticsLib V0.1.0
+    [ADDED] Enabling parabolic mode on main guns that default to it
+    [FIXED] Fixed parabolic toggle not toggling parabolic
+V1.0.4 (12-30-20)
+    [FIXED] Fixed Velocity not being updated on MSGBUS
+    [ADDED] Added target track weights
+    [ADDED] Added target velocity to Test_Target
+V1.0.5 (01-03-21)
+    [FIXED] Undocumented fixes to make rIIFLe functional
+V1.0.6 (01-05-21)
+    [UPDATED] Updated aimpos source to use Cam's hitpos
+    [FIXED] Final fix for rIFFLe integration
+    [ADDED] Added sightless mode for fizzles
+V1.0.7 (01-16-21)
+    [UPDATED] Removed code that assures the base is the first entity in self array (Turns out to not be required and seems to crash with higher ent count vehicles)
+    [ADDED] Added code to add the base to the first entry of the self array when getConnectedEntities is not available
+V1.1.0 (01-22-21)
+    [ADDED] Added basic gun follows sight thingy (Hold lase)
+
+
+
+//////////TO-DO\\\\\\\\\\
+Stabilizer
+Prop not solid sight when in use
+
+/////DONE\\\\\
+No-sight mode
+
+
+
+//////////MSGBUS\\\\\\\\\\
+/////MSGBUS INPUTS\\\\\
+MAIN_GUN_SELECTED_BALLISTIC_SOLUTION [VECTOR3] - Ballistic Solution to add to aimpos
+MAIN_GUN_SELECTED_FLIGHT_TIME        [NUMBER]  - Ballistic flight time from ballistic computer
+MAIN_GUN_SELECTED                    [ENTITY]  - Gun to use for aiming
+WEAPONS_FREE                         [NUMBER]  - If the weapons are free to aim
+WEAPONS_OVERRIDE                     [NUMBER]  - If the aim system is not using fire gating
+FIRE_PLAN_EXECUTED                   [NUMBER]  - Fire plans have been executed
+MAP_POINT                            [VECTOR3] - Map aimpos
+MAIN_GUN_IS_PARABOLIC                [NUMBER]  - If the currently selected gun defaults to parabolic
+COUNTER_TARGET                       [VECTOR3] - Countermeasure target for pass-through
+COUNTER_SPEED                        [VECTOR3] - Countermeasure speed for pass-through
+DRONE_TARGET                         [VECTOR3] - Aimpos from spotting drone
+TEST_TARGET                          [VECTOR3] - A debug testing input for verifying systems
+DRIVER                               [ENTITY]  - Driver driving vehicle
+
+/////MSGBUS OUTPUTS\\\\\
+BALLISTIC_COMPUTER_POWER_ON       [NUMBER]  - Power circuit for ballistic computer
+BALLISTIC_COMPUTER_LEAD_ON        [NUMBER]  - If target leading on
+BALLISTIC_COMPUTER_DRIFT_ON       [NUMBER]  - If drift compensation on
+BALLISTIC_COMPUTER_PARABOLIC_MODE [NUMBER]  - If mortar mode on
+RANGE                             [NUMBER]  - Range reading
+AIMPOS                            [VECTOR3] - Aimpos
+VELOCITY                          [VECTOR3] - Current vehicle velocity
+POSITION                          [VECTOR3] - Current vehicle position
+ANGLE                             [ANGLE]   - Current vehicle angle
+TARGET_SPEED                      [VECTOR3] - Speed of target for ballistics computer if not manually leading
+GUNNER                            [ENTITY]  - Gunner controlling armament
+FIRE_COMMAND                      [NUMBER]  - Fire the gun remotely
+TARGET_TRACK                      [NUMBER]  - Track weight for anti-aircraft guns, 0-1
+SELF                              [ARRAY]   - Array of all constrainted/parented props
+CAM_OFF                           [NUMBER]  - Camera is off, do touchscreen stuff
+FLIR                              [NUMBER]  - If FLIR on/off
+AUTOMATIC_COUNTERMEASURES         [NUMBER]  - If running automatic countermeasures
+CURTIME                           [NUMBER]  - Current time as of update for synchronizing
+REARVIEW                          [NUMBER]  - If camera is backwards
+NODE_LISTING                      [ARRAY]   - BUS Nodes
+NODE_NAMES                        [ARRAY]   - Human-readable format of BUS nodes
+NODE_ERROR_MSGS                   [ARRAY]   - Array of error codes raised by various subsystems
+]#
+
+
+#//////////INITIALIZATION\\\\\\\\\\#
+#Reset the E2 if we have been duped or the dupe has finished spawning
+if(duped()|dupefinished()) {reset()}
+
+#Continue the initialization
+if(first())
+{
+    #/////SETTINGS\\\\\#
+    #//CAMERA\\#
+    #This sets the position of the camera relative to the base if you're not using a sight ):
+    local CAMPOS = vec(0,0,100) #Default: vec(0,0,100)
+
+
+    #//CAMO\\#
+    #Sets the which color you want the sight to be camoed to (If using one)
+    local CamoCol = "red" #Default: "red"
+    #Only used if you selected green or purple
+    local CamoMat = ""
+
+
+    #//MISC\\#
+    #Changes the index at which holograms start to spawn at
+    local Index = 0 #Default: 0
+
+    #Turns off the notification you get when interrogated (You will still get notifications if you are the interrogator)
+    RENIFFLREC = 1 #Default: 1
+
+
+
+    #/////LIBRARIES\\\\\#
+    #include "SCRL"
+    #include "renKeyLib"
+    #include "renIFFLib"
+    #include "renOpticsLib"
+
+
+
+    #/////INITIALIZE VARIABLES\\\\\#
+    #//FREQUENCIES\\#
+    BUS_UPDATE_FREQUENCY   = 50   #Default: 50   Updates the BUS with new info
+    CAMREF_FREQUENCY       = 75   #Default: 75   Updates the entire scope assembly
+    AIMER_FREQUENCY        = 150  #Default: 150  Updates the aimer
+    GUNNER_QUERY_FREQUENCY = 1000 #Default: 1000 Looks for a gunner in the seat
+    INTERROGATION_TICK     = 80   #Default: 80  Completes the interrogation if we're the interrogatee
+
+    #//"RUNTIME" VARIABLES\\#
+    FLIR = 0
+    CurSource=Aimer = 1
+
+    #//GLOBAL VARIABLES\\#
+    #On or orf
+    ACTIVATIONS[0,string] = "off"
+    ACTIVATIONS[1,string] = "on"
+
+    #Aimpos Sources
+    SOURCES[1,string] = "Aimpos" #Where we're aiming
+    SOURCES[2,string] = "SCRL"   #The good old radio library, listens for artillery commands
+    SOURCES[3,string] = "GTMP"   #Aim via the map
+    SOURCES[4,string] = "Drone"  #Aim via the drone
+    SOURCES[5,string] = "CIWS"   #Shoot down pesky missiles
+    SOURCES[6,string] = "Test"   #Utilize the testbox for thingies
+
+    #Aimers
+    AIMERS[1,string] = "Day" #Regular day sight
+    AIMERS[2,string] = "Night" #Thermal sight for nightime use
+    AIMERS[3,string] = "Backup" #Backup sight when your FCS gets shot off
+
+
+
+    #/////HOLOGRAMS\\\\\#
+    #//SIGHT\\#
+    Index = entity():renOLCreateSight(Index)
+    renOLCamoSight(CamoCol,CamoMat)
+
+    #//CAMREF\\#
+    holoCreate(Index,RenOL_SIGHTREFS:count() ? entity():toWorld(vec(0,0,8)) : Base:toWorld(CAMPOS),vec(0),entity():toWorld(ang(0)),vec4(0))
+    holoParent(Index,entity())
+    holoVisible(Index,players(),0)
+    CAMREF = Index
+    CAMREFE = holoEntity(Index)
+    Index++
+
+    #//SCOPE\\#
+    Index = Index:renOLCreateScope(Gunner)
+
+    #//AIMER\\#
+    Index = Index:renOLCreateDayAimer(Gunner)
+
+
+
+    #/////FUNCTIONS\\\\\#
+    #//MSGBUS\\#
+    #Grabs everything we need from the MSGBUS
+    function void msgBusIn()
+    {
+        if(->MSGBUS)
+        {
+            Ballistic_Solution = MSGBUS["MAIN_GUN_SELECTED_BALLISTIC_SOLUTION",vector]
+            Flight_Time        = MSGBUS["MAIN_GUN_SELECTED_FLIGHT_TIME",number]
+            Main_Gun           = MSGBUS["MAIN_GUN_SELECTED",entity]
+            Weapons_Free       = MSGBUS["WEAPONS_FREE",number]
+            Weapons_Override   = MSGBUS["WEAPONS_OVERRIDE",number]
+            Fire_Plan_Exe      = MSGBUS["FIRE_PLAN_EXECUTED",number]
+            Map_Point          = MSGBUS["MAP_POINT",vector]
+            Main_Gun_Parabolic = MSGBUS["MAIN_GUN_IS_PARABOLIC",number]
+            Counter_Target     = MSGBUS["COUNTER_TARGET",vector]
+            Counter_Speed      = MSGBUS["COUNTER_SPEED",vector]
+            Drone_Target       = MSGBUS["DRONE_TARGET",vector]
+            Test_Target        = MSGBUS["TEST_TARGET",vector]
+            Driver             = MSGBUS["DRIVER",entity]
+        }
+    }
+
+    #Dumps things we have to the MSGBUS
+    function void msgBusOut()
+    {
+        if(->MSGBUS)
+        {
+            MSGBUS["BALLISTIC_COMPUTER_POWER_ON",number]       = Ballistics_Power_On
+            MSGBUS["BALLISTIC_COMPUTER_LEAD_ON",number]        = Ballistics_Lead_On
+            MSGBUS["BALLISTIC_COMPUTER_DRIFT_ON",number]       = Ballistics_Drift_On
+            MSGBUS["BALLISTIC_COMPUTER_PARABOLIC_MODE",number] = Ballistics_Parabolic_On
+            MSGBUS["RANGE",number]         = Range
+            MSGBUS["AIMPOS",vector]        = Aimpos
+            MSGBUS["VELOCITY",vector]      = Velocity
+            MSGBUS["POSITION",vector]      = Position
+            MSGBUS["ANGLE",angle]          = Angle
+            MSGBUS["TARGET_SPEED",vector]  = Target_Speed
+            MSGBUS["GUNNER",entity]        = Gunner
+            MSGBUS["FIRE_COMMAND",number]  = Fire_Command
+            MSGBUS["TARGET_TRACK",number]  = Target_Track
+            MSGBUS["SELF",array]           = Self
+            MSGBUS["CAM_OFF",number]       = Cam_Off
+            MSGBUS["FLIR",number]          = FLIR
+            MSGBUS["AUTOMATIC_COUNTERMEASURES",number] = Automatic_Countermeasures
+            MSGBUS["CURTIME",number]       = Curtime
+            MSGBUS["REARVIEW",number]      = Rearview
+            #MSGBUS["NODE_LISTING",array]   = Node_Listing
+            #MSGBUS["NODE_NAMES",array]     = Node_Names
+            #MSGBUS["NODE_ERROR_MSGS",array] = Node_Errors
+        }
+    }
+
+
+    #//MISC\\#
+    #[Notifies the gunner via a toast, don't forget your punctuation!
+    Inputs:
+        Message [STRING] - The message that will be sent to the Gunner (Appends [renOptics] before the message)
+    ]#
+    function void notifyGunner(Message:string)
+    {
+        Gunner:vehicle():hintDriver("[renOptics] "+Message,5.5)
+    }
+
+    #[Formats a string with Gunner: <GUNNERNAME>, Driver: <DRIVERNAME>. depending on who's here
+    Inputs:
+        Gunner [ENTITY] - The Gunner
+        Driver [ENTITY] - The Driver
+    Return:
+        [STRING] Returns a string with either the gunner or driver
+    ]#
+    function string formatRIFFL(Gunner:entity,Driver:entity)
+    {
+        local Return = array()
+        if(Gunner:isPlayer()) {Return:pushString("Gunner: "+Gunner:name())}
+        if(Driver:isPlayer()&(Driver!=Gunner)) {Return:pushString("Driver: "+Driver:name())}
+        return vonEncode(Return)
+    }
+
+
+
+    #/////FINALIZE\\\\\#
+    #//MSGBUS\\#
+    #Since this E2 acts as the "hub" we need to create each and every one of the thingies for thingies to work
+    MSGBUS = table()
+    MSGBUS["GUNNER",entity]       = noentity()
+    MSGBUS["DRONE_TARGET",vector] = vec()
+    MSGBUS["AIMPOS",vector]       = vec()
+    MSGBUS["VELOCITY",vector]     = vec()
+    MSGBUS["FIRE_COMMAND",number] = 0
+    MSGBUS["SELF",array]          = array()
+    MSGBUS["MAIN_GUN_SELECTED_FLIGHT_TIME",number] = 0
+    MSGBUS["TARGET_TRACK",vector]          = vec()
+    MSGBUS["MAIN_GUN_SELECTED",entity]     = noentity()
+    MSGBUS["WEAPONS_FREE",number]          = 0
+    MSGBUS["MAIN_GUN_IS_PARABOLIC",number] = 0
+    MSGBUS["SPD_RATIO",number]             = 0
+    MSGBUS["DRIVER",entity]                = noentity()
+    MSGBUS["STEERING_INPUT",number]        = 0
+    MSGBUS["FLIR",number]                  = 0
+    MSGBUS["BALLISTIC_COMPUTER_POWER_ON",number]          = 0
+    MSGBUS["BALLISTIC_COMPUTER_LEAD_ON",number]           = 0
+    MSGBUS["BALLISTIC_COMPUTER_DRIFT_ON",number]          = 0
+    MSGBUS["BALLISTIC_COMPUTER_PARABOLIC_MODE",number]    = 0
+    MSGBUS["TARGET_SPEED",vector]                         = vec(0)
+    MSGBUS["MAIN_GUN_SELECTED_BALLISTIC_SOLUTION",vector] = vec(0)
+    MSGBUS["BALLISTIC_COMPUTER_TABLE",table]              = table()
+    MSGBUS["CMDR_TARGET",vector]    = vec(0)
+    MSGBUS["POSITION",vector]       = Base:pos()
+    MSGBUS["ALERT_LEVEL",number]    = 0
+    MSGBUS["THREAT_DATA",array]     = array()
+    MSGBUS["COUNTER_TARGET",entity] = noentity()
+    MSGBUS["COUNTER_SPEED",vector]  = vec(0)
+    MSGBUS["RADAR_DATA",array]      = array()
+    MSGBUS["BREAKS_APPLIED",number] = 0
+    MSGBUS["SUSPENSION_HEIGHT_SETTING",number] = 0
+    MSGBUS["MAP_POINT",vector]   = vec(0)
+    MSGBUS["RPM",number]         = 0
+    MSGBUS["ENGINES",array]      = array()
+    MSGBUS["FUEL_ON",number]     = 0
+    MSGBUS["POWERBAND",vector]   = vec(0)
+    MSGBUS["MOUSE_STEER",number] = 0
+    MSGBUS["TRANSMISSION_MODE",number]  = 0
+    MSGBUS["WEAPONS_OVERRIDE",number]   = 0
+    MSGBUS["FIRE_PLAN_EXECUTED",number] = 0
+    MSGBUS["TEST_TARGET",vector]        = vec(0)
+    MSGBUS["RANGE",number]              = 0
+    MSGBUS["ANGLE",angle]               = Base:angles()
+    MSGBUS["CAM_OFF",number]            = 0
+    MSGBUS["AUTOMATIC_COUNTERMEASURES",number] = 0
+    MSGBUS["CURTIME",number]        = curtime()
+    MSGBUS["REARVIEW",number]       = 0
+    MSGBUS["NODE_LISTING",array]    = array()
+    MSGBUS["NODE_NAMES",array]      = array()
+    MSGBUS["NODE_ERROR_MSGS",array] = array()
+
+
+    #//BUILDING VARIABLES\\#
+    #Building the Self array
+    #Used to determine if we need to use an alternative method
+    local Success = 0
+
+    #Uses the Base entity or the E2 itself if it's not wired
+    local ABase = entity()
+    if(Base:isValidPhysics()) {ABase = Base}
+
+    #First we try the method that will get absolutely everything
+    #ifdef entity:getConnectedEntities(array)
+        Success++
+
+        Self = ABase:getConnectedEntities()
+    #endif
+
+    #Else we'll try the next best thing, also notify the user that the server is pretty shit
+    #ifdef entity:getConstraints()
+        if(!Success)
+        {
+            Success++
+
+            Self = ABase:getConstraints()
+            Self:unshiftEntity(ABase)
+
+            print("[renOptics] :getConnectedEntities() does not exist on this server, some things may not be detected properly!")
+        }
+    #endif
+
+    #Tell the user the server is shitty
+    if(!Success) {print("[renOptics] Unable to build 'Self' array, please update wiremod!")}
+    #else{for(E=1,Self:count()) {if(Self[E,entity] == ABase) {Self:removeEntity(E)}} Self:unshiftEntity(ABase)}
+
+    #Turn on the ballistics confuser
+    Ballistics_Power_On = 1
+
+
+    #//TIMERS\\#
+    timer("gunner_query",GUNNER_QUERY_FREQUENCY)
+    timer("bus_update",BUS_UPDATE_FREQUENCY)
+
+
+    #//MISC\\#
+    runOnChat(1) #Obviously required for SCRL and maybe future additions :)
+
+    #Persist and filter our vehicle/emplacement from a ranger
+    rangerPersist(1)
+    rangerFilter(Self)
+
+    Cam["Parent",entity] = CAMREFE
+    Cam["FilterEntities",array] = Self
+    if(->GFSCam)
+    {
+        USINGGFS = 1
+        GFSCam["Parent",entity] = CAMREFE
+        GFSCam["FilterEntities",array] = Self
+    }
+
+
+    #//VERSION\\#
+    VERSION = "V1.1.0"
+    setName("renOptics "+VERSION)
+
+
+    #//FINALIZE MSGBUS\\#
+    #Push the name of this E2 to the bus
+    MSGBUS["NODE_NAMES",array]:pushString(entity():getName())
+
+    #Update bus.
+    msgBusIn()
+    msgBusOut()
+}
+
+
+
+#//////////ZOOM\\\\\\\\\\#
+#Zooms in/out, also moves the cam out if you zoom far enough
+elseif(inputClk())
+{
+    #If we scroll and the camera is active, zoom in/out
+    if(changed(NextWeapon|PrevWeapon)&(!Cam_Off))
+    {
+        #Increasing the zoom factor
+        local ZoomInc = (NextWeapon-PrevWeapon)*20
+        Zoom = clamp(Zoom+ZoomInc,10,300)
+
+        #Clamping the FOV and CamDist
+        local FOV = clamp(Zoom,10,90)
+        local CamDist = clamp(Zoom,90,300)-90 #-90 So it starts at 0
+
+        #Update those thangs
+        Cam["Distance",number] = max(CamDist,0)
+        Cam["FOV",normal] = FOV
+        if(USINGGFS) {GFSCam["Distance",number] = max(CamDist,0) GFSCam["FOV",number] = FOV}
+
+        Gunner:renOLUpdateVisibility(!Cam_Off,CamDist>0)
+    }
+}
+
+
+
+#//////////CHAT COMMANDS\\\\\\\\\\#
+elseif(chatClk(Gunner))
+{
+    local Said = Gunner:lastSaid():lower()
+    local Split = Said:explode(" ")
+    local Command = Split:string(1)
+    local Arg1 = Split:string(2)
+
+    switch(Command)
+    {
+        case "fs",
+            foreach(K,E:entity = Self)
+            {
+                #ifdef entity:propFreeze(number)
+                    E:propFreeze(Arg1:toNumber())
+                #endif
+            }
+
+            hideChat(1)
+        break
+
+        case "nodes",
+            print(MSGBUS["NODE_NAMES",array])
+
+            hideChat(1)
+        break
+
+        default,
+            scr_chat(GunnerSeat, rangerOffset(9999999999,CAMREFE:pos()+Cam["CamDir",vector],Cam["CamDir",vector]):pos())
+        break
+    }
+}
+
+
+
+#//////////KEYS\\\\\\\\\\#
+#All of the keyey goodness
+elseif(keyClk(Gunner))
+{
+    #Don't do key things when the user is typing
+    if((!Gunner:isTyping())&Gunner:vehicle())
+    {
+        #Get the things
+        local Key = keyClkPressed()
+        local Pressed = Gunner:keyPressed(Key)
+
+        #/////Keys\\\\\#
+        switch(Key)
+        {
+            #//VIEW SWITCH\\#
+            case RenKL_KEYS["VIEW_SWITCH",string],
+                if(Pressed)
+                {
+                    Cam_Off = !Cam_Off
+
+                    Cam["Activated",number] = !Cam_Off
+
+                    Gunner:renOLUpdateVisibility(!Cam_Off,(clamp(Zoom,90,300)-90)>0)
+                }
+            break
+
+            #//FLIR TOGGLE\\#
+            case RenKL_KEYS["SWITCH_AIMER",string],
+                if(Pressed)
+                {
+                    if(Aimer+1 > AIMERS:count()) {Aimer = 1} else{Aimer++}
+
+                    switch(Aimer)
+                    {
+                        case 1,
+                            RenOL_AIMERI:renOLCreateDayAimer(Gunner)
+                            FLIR = 0
+
+                            soundPlay("aimer switch",1.1,"buttons/button1.wav")
+                        break
+
+                        case 2,
+                            RenOL_AIMERI:renOLCreateNightAimer(Gunner)
+                            FLIR = 1
+
+                            soundPlay("aimer switch",1.1,"buttons/button1.wav")
+                            soundVolume("aimer switch",0.5)
+                        break
+
+                        case 3,
+                            RenOL_AIMERI:renOLCreateBackupAimer(Gunner,Range_Table)
+                            FLIR = 0
+
+                            soundPlay("aimer switch",1.1,"buttons/button1.wav")
+                        break
+                    }
+
+                    notifyGunner("Aimer switched to "+AIMERS[Aimer,string]+".")
+
+                    Cam["FLIR",number] = FLIR
+                    GFSCam["FLIR",number] = FLIR
+                }
+            break
+
+            #//PARABOLIC TOGGLE\\#
+            case RenKL_KEYS["TOGGLE_PARA",string],
+                if(Pressed)
+                {
+                    Ballistics_Parabolic_On = !Ballistics_Parabolic_On
+
+                    notifyGunner("Toggling parabolic "+ACTIVATIONS[Ballistics_Parabolic_On,string]+".")
+
+                    soundPlay("parabolic toggle",0.3,"buttons/blip1.wav")
+                    soundVolume("parabolic toggle",0.5)
+                }
+            break
+
+            #//SOURCE CYCLE\\#
+            case RenKL_KEYS["SOURCE_CYCLE",string],
+                if(Pressed)
+                {
+                    if(CurSource+1 > SOURCES:count()) {CurSource = 1} else{CurSource++}
+
+                    notifyGunner("Switching to "+SOURCES[CurSource,string]+".")
+
+                    soundPlay("source switch",0.4,"buttongs/button9.wav")
+                    soundVolume("source",0.5)
+                }
+            break
+
+            #//COUNTERMEASURES DEPLOYATION\\#
+            case RenKL_KEYS["DEPLOY_COUNTER",string],
+                Countermeasures = Pressed
+            break
+
+            #//IFF INTERROGATION\\#
+            case RenKL_KEYS["INTERROGATE",string],
+                if(Pressed)
+                {
+                    notifyGunner("Interrogating target.")
+                    
+                    RIFFLEData = formatRIFFL(Gunner,Driver)
+
+                    local RIFFLE = renIFFLStart(RIFFLEData,Cam["HitPos",vector],Curtime)
+
+                    scr_transmit(6,RIFFLE[1,string],RIFFLE[2,vector],noentity())
+                }
+            break
+
+            #//LASING/GFS\\#
+            case RenKL_KEYS["LASE",string],
+                if(USINGGFS)
+                {
+                    GFSActive = Pressed
+                    
+                    Cam["Activated",number] = !GFSActive
+                    GFSCam["Activated",number] = GFSActive
+                    
+                    if(GFSActive) {} else{}
+                }
+            break
+
+            #//SCRL INTEGRATION\\#
+            default,
+                if(Pressed)
+                {
+                    local Num = Key:right(1):toNumber()
+                    if(Key:left(3) == "pad" & (Num | Key:right(1)=="0"))
+                    {
+                        scr_keyTransmit(Gunner, Cam["HitPos",vector])
+                    }
+                }
+            break
+        }
+    }
+}
+
+
+
+#//////////BUS UPDATE\\\\\\\\\\#
+#Sends and receives things from the bus, and also gets the aimposition and range
+elseif(clk("bus_update"))
+{
+    #Start the timer again, and get everything from the bus
+    timer("bus_update",BUS_UPDATE_FREQUENCY)
+    msgBusIn()
+
+    #Updating the Aimpos
+    switch(CurSource)
+    {
+        #//REGULAR AIMPOS\\#
+        case 1,
+            if(!GFSActive)
+            {
+                Aimpos = Cam["HitPos",vector]
+                Target_Speed = vec(0)
+                Target_Track = 0.25
+            }
+        break
+
+        #//SCRL ARTILLERY COMMAND\\#
+        case 2,
+            Aimpos = ArtyRequest
+            Target_Speed = vec(0)
+            Target_track = 1
+        break
+
+        #//GTMP MAP POINT\\#
+        case 3,
+            Aimpos = Map_Point
+            Target_Speed = vec(0)
+            Target_Track = 1
+        break
+
+        #//SPOTTER DRONE TARGET\\#
+        case 4,
+            Aimpos = Drone_Target
+            Target_Speed = vec(0)
+            Target_Track = 0.25
+        break
+
+        #//CIWS TARGET\\#
+        case 5,
+            Aimpos = Counter_Target
+            Target_Speed = Counter_Speed
+            Target_Track = 1
+        break
+
+        #//TESET TARGET\\#
+        case 6,
+            Aimpos = Test_Target
+            Target_Speed = $Test_Target
+            Target_Track = 1
+        break
+    }
+
+    #Get the range from the camera reference to the aimpos, converts to meters
+    Range = ((CAMREFE:pos() - Aimpos):setZ(0):length())/39.37
+
+    #Update all the positionals, curtime
+    Position = Base:pos()
+    Angle = Base:angles()
+    Velocity = Base:vel()
+    Curtime = curtime()
+
+    #Automatically turn on parabolic mode if the main gun is parabolic
+    if(changed(Main_Gun)) {Ballistics_Parabolic_On = Main_Gun_Parabolic}
+
+    #Output everything
+    msgBusOut()
+}
+
+
+
+#//////////CAMREF UPDATE\\\\\\\\\\#
+#Updates the camera reference, what is also the thing that the scope parents to
+elseif(clk("cam_ref"))
+{
+    timer("cam_ref",CAMREF_FREQUENCY)
+
+    #If the cam isn't off, do the thing
+    if(!Cam_Off)
+    {
+        holoAng(CAMREF,(Aimpos-CAMREFE:pos()):toAngle())
+        if(GFSActive) {GFSCam["Direction",vector] = Aimpos-holoEntity(CAMREF):pos()} #holoEntity(CAMREF):toLocal(Aimpos)
+        #holoAng(CAMREF,(Aimpos-CAMREFE:pos()):toAngle()-(($Angle)*(CAMREF_FREQUENCY/1000)))
+        #holoAng(CAMREF,Cam["CamAng",angle]+(Base:angVel()/10))
+    }
+}
+
+
+
+#//////////AIMER UPDATE\\\\\\\\\\#
+#Updates the display on the aimer
+elseif(clk("aimer_update"))
+{
+    timer("aimer_update",AIMER_FREQUENCY)
+
+    renOLUpdateSight(Aimpos)
+
+    if(!Cam_Off)
+    {
+        switch(Aimer)
+        {
+            case 1,
+                renOLUpdateDayAimer(Range,Main_Gun:acfReady(),SCRLData)
+            break
+
+            case 2,
+                renOLUpdateNightAimer(Range)
+            break
+
+            case 3,
+                renOLUpdateBackupAimer(Range_Table)
+            break
+        }
+    }
+}
+
+
+
+#//////////GUNNER QUERY\\\\\\\\\\#
+#Looks for a gunner.
+elseif(clk("gunner_query"))
+{
+    #Start the timer over again and check to see if anyone took the bait
+    timer("gunner_query",(Gunner) ? (GUNNER_QUERY_FREQUENCY) : (GUNNER_QUERY_FREQUENCY >> 1))
+
+    Gunner = GunnerSeat:driver()
+
+    if(changed(Gunner))
+    {
+        #Update the visbility for the gunner
+        Gunner:renOLUpdateVisibility(!Cam_Off,(clamp(Zoom,90,300)-90)>0)
+
+        #Update RIFFLEData
+        RIFFLEData = formatRIFFL(Gunner,Driver)
+
+        #We've got someone, turn on the important things, and return the camera to it's previous state
+        if(Gunner:isPlayer())
+        {
+            timer("cam_ref",CAMREF_FREQUENCY)
+            timer("aimer_update",AIMER_FREQUENCY)
+
+            Cam["Activated",number] = !Cam_Off
+        }
+
+        #They left, stop those times and shut the camera off juuuust in case
+        else
+        {
+            stoptimer("cam_ref")
+            stoptimer("aimer_update")
+
+            Cam["Activated",number] = 0
+        }
+    }
+}
+
+
+
+#//////////SCRL INTEGRATION\\\\\\\\\\#
+#If we get a datasignal update, get the data and update the arty request pos, much better than last time
+elseif(dsClk())
+{
+    SCRLData = scr_recieve(GunnerSeat)
+
+    local Request = SCRLData[1,string]
+    local Pos = SCRLData[2,vector]
+
+    if(Request == "ARTY")
+    {
+        ArtyRequest = Pos
+    }
+
+    #rIFFLe integration
+    RIFFLEData = formatRIFFL(Gunner,Driver)
+    local RIFFLE = renIFFLRecieve(SCRLData,RIFFLEData,Position,Curtime)
+
+    #We were the sender, tell the gunner who or what we have succesfully interrogated
+    if(RIFFLE:count() == 1)
+    {
+        notifyGunner("Interrogation complete: "+RIFFLE[1,string])
+    }
+
+    #We are the interrogatee, notify the gunner who interrogated us, and complete the interrogation
+    elseif(RIFFLE:count() == 3)
+    {
+        timer("interrogation_tick",INTERROGATION_TICK)
+
+        if(RENIFFLREC) {notifyGunner("Interrogated by: "+RIFFLE[3,string])}
+    }
+}
+
+elseif(clk("interrogation_tick")) {local RIFFLE = renIFFLRecieve(SCRLData,RIFFLEData,Position,Curtime) scr_transmit(5,RIFFLE[1,string],RIFFLE[2,vector],noentity())}

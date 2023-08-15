@@ -1,0 +1,224 @@
+@name rauPointsLib
+@persist [RauPL_MapLoaded RauPL_LoadAttempts]:number [RauPL_MapData]:table
+@persist [RauPL_VERSION RauPL_STRING]:string
+#[
+E2 Library By:
+    Renco - Everything
+
+!!!!!
+REALLY DO-NOT RE-DISTRIBUTE!
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+This library does pathfinding stuff using pre-compiled waypoints, see me (Renco) to generate or give you the map files
+or you can generate them yourself using rauMapper
+Standard Layout:
+RAU_<MAPNAME>.txt
+    METADATA [TABLE]; Data about the currently loaded points file
+        DATECREATED   [STRING]; Date when file was created (MM/DD/YY,HH:MM:SS)
+        E2CREATOR     [STRING]; Name of the E2 that created this file
+        CREATOR       [STRING]; Steam ID and name of the creator
+        POINTCVERSION [STRING]; Version of rauPointsLib used to create this file
+        DATEUPDATED   [STRING]; Last time file was updated (MM/DD/YY,HH:MM:SS)
+        E2UPDATER     [STRING]; Name of the E2 that updated this file
+        UPDATER       [STRING]; Steam ID and name of the updater
+        POINTUVERSION [STRING]; Version of rauPointsLib after updating
+        MAPVERSION    [NUMBER]; Incremental number after each update
+        NOTES         [STRING]; Notes about this particular file
+        EXTRADATA     [TABLE];  Used for special things
+    GRN [TABLE]; Table of ground unit points
+        <POINTINDEX#> [ARRAY]; An array of the next reachable points
+            string(POINTTYPE); Type of point this is can be NAV, COV
+                NAV; Regular navigation point for going places
+                COV; Cover, wont pathfind to or across unless requested
+            vec2(NEXTAVAILABLE,DISTANCE); Index of the next reachable point, and the distance between the two
+            vec2(MAXANG,MINANG); Used only with COV point type, vehicle should position itself at around this angle (Yaw)
+    AIR [TABLE]; Table of air unit points
+    NAV [TABLE]; Table of naval unit points
+
+
+
+//////////VERSION LOG\\\\\\\\\\
+V0.0.0 (10-29-20) - Initial Development
+V0.0.1 (12-01-20) -
+    [ADDED] number vector:rauPLDistance(vector); Returns the distance between two vectors converted to meters
+    [ADDED] rauPLBugOwner(string); Prints a message to the owner's console with <curtime()> for debugging purposes
+    [ADDED] rauPLNotifyOwner(string); Notifies the owner of a message
+    [ADDED] rauPLNew(); Sets up the internal table for a new file
+    [ADDED] number rauPLLoad(); Loads the current map file if any
+    [ADDED] rauPLSave(); Saves the current map file
+V0.0.2 (12-10-20) -
+    [ADDED] Added metadata for E2 creator and E2 Updater
+    [ADDED] Added rauPLClear(); Clears the internal table and resets the loaded state
+
+
+
+//////////TO-DO\\\\\\\\\\
+Save distances between points
+
+/////DONE\\\\\
+]#
+
+
+#//////////VARIABLES\\\\\\\\\#
+RauPL_VERSION = "V0.0.1"
+RauPL_STRING = "RAU_"
+
+
+
+#//////////FUNCTIONS\\\\\\\\\#
+#[Gets the distance between two vectors, returns the distance in meters
+Inputs:
+    [VECTOR] - The first position
+    Other [VECTOR] - The second position
+Return:
+    [NUMBER] Distance between the two points in meters
+]#
+function number vector:rauPLDistance(Other:vector)
+{
+    return ((This - Other):setZ(0):length())/39.37
+}
+
+#[Prints stuff in the owner's console
+Inputs:
+    Message [STRING] - The message that will be printed
+]#
+function void rauPLBugOwner(Message:string)
+{
+    print(_HUD_PRINTCONSOLE,"[rauPointsLib] <"+curtime()+"> "+Message)
+}
+
+#[Notifies the owner of somthing gone wrong
+Inputs:
+    Message [STRING] - Message to notify owner
+]#
+function void rauPLNotifyOwner(Message:string)
+{
+    hint("[rauPointsLib] "+Message,5.5)
+}
+
+#[Sets up the internal table for a new file
+]#
+function void rauPLNew()
+{
+    if(RauPL_MapLoaded)
+    {
+        rauPLBugOwner("Map already loaded!")
+    }
+
+    else
+    {
+        RauPL_MapData = table()
+        RauPL_MapData["METADATA",table] = table()
+        RauPL_MapData["METADATA",table]["DATECREATED",string] = time("month")+"/"+time("day")+"/"+time("year")+", "+time("hour")+":"+time("min")+":"+time("sec")
+        RauPL_MapData["METADATA",table]["E2CREATOR",string] = entity():name()
+        RauPL_MapData["METADATA",table]["CREATOR",string] = owner():steamID()+", "+owner():name()
+        RauPL_MapData["METADATA",table]["POINTCVERSION",string] = RauPL_VERSION
+        RauPL_MapData["METADATA",table]["DATEUPDATED",string] = ""
+        RauPL_MapData["METADATA",table]["E2UPDATER",string] = ""
+        RauPL_MapData["METADATA",table]["UPDATER",string] = ""
+        RauPL_MapData["METADATA",table]["POINTUVERSION",string] = ""
+        RauPL_MapData["METADATA",table]["MAPVERSION",number] = 0
+        RauPL_MapData["METADATA",table]["NOTES",string] = ""
+        RauPL_MapData["METADATA",table]["EXTRADATA",table] = table()
+        RauPL_MapData["GRN",table] = table()
+        RauPL_MapData["AIR",table] = table()
+        RauPL_MapData["NAV",table] = table()
+
+        RauPL_MapLoaded = 1
+
+        rauPLBugOwner("Creating new map file for: "+map()+".")
+    }
+}
+
+#[Clears the internal table and resets the loaded state
+]#
+function void rauPLClear()
+{
+    if(RauPL_MapLoaded)
+    {
+        RauPL_MapData = table()
+
+        RauPL_MapLoaded = 0
+
+        rauPLBugOwner("Clearing internal memory.")
+    }
+
+    else
+    {
+        rauPLBugOwner("No map file to clear!")
+    }
+}
+
+#[Attempts to load the current map's file, essentially constantly run this until it returns 1
+Return:
+    [NUMBER] Returns 1 when map was succesfully loaded
+]#
+function number rauPLLoad()
+{
+    local Loaded = 0
+
+    if(RauPL_MapLoaded == 0)
+    {
+        fileLoad(RauPL_STRING+map())
+
+        RauPL_MapLoaded = -1
+
+        RauPL_LoadAttempts = 1
+
+        rauPLBugOwner("Attemping to load map: "+RauPL_STRING+map()+".")
+    }
+
+    elseif(RauPL_MapLoaded == -1)
+    {
+        if(fileLoaded())
+        {
+            RauPL_MapData = vonDecodeTable(fileRead())
+
+            RauPL_MapLoaded=Loaded = 1
+
+            rauPLBugOwner("Succesfully loaded map in "+RauPL_LoadAttempts+" attempts!")
+        }
+        else
+        {
+            RauPL_LoadAttempts++
+
+            rauPLBugOwner("Waiting for map upload, attempt: "+RauPL_LoadAttempts)
+        }
+    }
+
+    elseif(RauPL_MapLoaded == 1)
+    {
+        Loaded = fileLoaded()
+
+        rauPLBugOwner("Map already loaded!")
+    }
+
+    return Loaded
+}
+
+#[Saves the current map's file
+]#
+function void rauPLSave()
+{
+    if(RauPL_MapLoaded)
+    {
+        #Update the update metadata
+        RauPL_MapData["METADATA",table]["DATEUPDATED",string] = time("month")+"/"+time("day")+"/"+time("year")+", "+time("hour")+":"+time("min")+":"+time("sec")
+        RauPL_MapData["METADATA",table]["E2UPDATER",string] = entity():name()
+        RauPL_MapData["METADATA",table]["UPDATER",string] = owner():steamID()+", "+owner():name()
+        RauPL_MapData["METADATA",table]["POINTUVERSION",string] = RauPL_VERSION
+        RauPL_MapData["METADATA",table]["MAPVERSION",number] = RauPL_MapData["METADATA",table]["MAPVERSION",number]+1
+
+        fileWrite(RauPL_STRING+map(),vonEncode(RauPL_MapData))
+
+        rauPLBugOwner("Saving map file.")
+    }
+
+    else
+    {
+        rauPLBugOwner("No map previously loaded.")
+    }
+}

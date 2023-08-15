@@ -1,0 +1,1051 @@
+@name renCamo
+@inputs [MSGBUS]:table #Normal Inputs
+@persist [MAXBUSHES]:number
+@persist [FLIR]:number [Operator]:entity [Self]:array #MSGBUS Inputs
+@outputs [VERSION]:string [REDS BLUES GREENS YELLOWS TEALS PURPLES BUSHCANDIDATES BUSHMODELS]:array [CAMO_LIST]:table [RED BLUE GREEN YELLOW TEAL PURPLE]:number #Global Variables
+@trigger [MSGBUS]
+@model models/props_lab/powerbox02c.mdl
+@autoupdate on
+#[
+E2 By:
+    Bubbus - Original Application
+    Fervidusletum - Base Chip, Presets, Updates
+    RedReaper - Enhanced Chip Capabilities, more Presets, Updates, Public Release
+    Renco - Implemented MSGBUS, made prettier, sound, loads of presets, better list functionality for very large amounts of camo schemes
+    Ghosteh - More Camo Schemes
+    Fizzles - Alpha Tester
+
+!!!!!
+Would rather you not re-distribute, people arent even going to be able to use this fully or at all
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+A modification of a modification, this E2 colour and or materials your vehicle based on a wide variety of presets
+
+
+
+//////////VERSION LOG\\\\\\\\\\
+V0.0.0 (10-12-20) - Initial Development
+V1.0.0 (10-12-20) - Functionally Complete
+V1.0.1 (10-12-20) - Removed MSGBUS Output, I'm told my old ass camo changing system is redundant; Removed a vestigal line; Pushes E2 name to node lisiting
+V1.0.2 (10-23-20) - Fixed Typo
+V1.0.3 (12-11-20) -
+    [UPDATED] Overhauled list command functionality
+    [UPDATED] Improved hint/notify functionality
+    [UPDATED] Updated camo switching notification system
+    [UPDATED] Improved reset command to reset after the camo has been set to default
+    [ADDED] E2 changes name to include currently selected camo
+V1.0.4 (12-13-20) -
+    [FIXED] Numerous undocumented fixes with Fizzle's help
+V1.0.5 (12-26-20) -
+    [UPDATED] Updated default camo texture
+V1.0.6 (12-29-20)
+    [FIXED] Fixed huge issue where only one material was used
+V1.1.0 (01-22-21)
+    [ADDED] Added ability to have "procedural" bushes added to your vehicle (Set MAXBUSHES to 0 to disable)
+V1.1.1 (01-23-21)
+    [FIXED] Fixed bushes only being hidden from the owner
+
+
+
+//////////TO-DO\\\\\\\\\\
+Procedural camo netting? Atleast somthing around the barrel
+
+/////DONE\\\\\
+
+
+
+//////////MSGBUS\\\\\\\\\\
+/////MSGBUS INPUTS\\\\\
+SELF   [ARRAY]  - The array of the vehicle's entities
+FLIR   [NUMBER] - If FLIR is on
+GUNNER [ENTITY] - Operator
+
+/////MSGBUS OUTPUTS\\\\\
+N/A
+]#
+
+
+#//////////INITILIZATION\\\\\\\\\\#
+#Reset the E2 if we have been duped or the dupe has finished spawning
+if (duped()|dupefinished()) {reset()}
+
+#If first we do the initilization
+if(first())
+{
+    MAXBUSHES = 15 #Default: 15
+    #/////INITIALIZE VARIABLES\\\\\#
+    #//GLOBAL VARIABLES\\#
+    CAMO_LIST = table()
+    CAMO_LIST["essential",string] = "ver, lis, und, ver"
+    CAMO_LIST["default",string] = "drab, snow, digisnow, woodland, stripe, flatdrab, slate, sand, lightsand, drabsand, gray, brown, blue, red, yellow, teal, police, tronred, tronblue trongreen, prep, takei, concrete"
+    CAMO_LIST["old",string] = "oldurban, oldsummer, olddesert, oldsnow, oldprep, oldgerman"
+    CAMO_LIST["zt",string] = "ztgrass"
+    CAMO_LIST["renco",string] = "gold, silver, rust, phx, sprops, glass, tronteal, japan, vandal, shield, dab, renco, screenspace, grassland, swedart, gerdes, gercar, zimsand, zimsnow, christmas, cheblue"
+    CAMO_LIST["ghosteh",string] = "m63f, m63lf, m63u, m63d, m63ld, m63d, m63c, m63n, m63tr, m63a, m51lf, m51lf, m51u, m51d, m51ld, m51c, m51n, m51a, m51tr"
+    CAMO_LIST["gregtech",string] = "wfe, os, ti, al, fe50c, fe, cu3sn, ta4hfc5, cu3agau, fe2ni, pt"
+
+    RED = 1
+    BLUE = 2
+    GREEN = 3
+    YELLOW = 4
+    TEAL = 5
+    PURPLE = 6
+
+
+
+    #/////FUNCTIONS\\\\\#
+    #//MSGBUS\\#
+    #Grabs everything this E2 needs from the MSGBUS
+    function void msgBusIn()
+    {
+        if(->MSGBUS)
+        {
+            Self = MSGBUS["SELF",array]
+            FLIR = MSGBUS["FLIR",number]
+            Operator = MSGBUS["GUNNER",entity]
+        }
+    }
+
+
+    #//MISC\\#
+    #[Hints to the operator, or the owner, the message
+    Inputs:
+        Message [STRING] - Notifies either the Operator or the Owner depending on presence
+    ]#
+    function void operatorNotify(Message:string)
+    {
+        if(Operator:isPlayer()) {Operator:vehicle():hintDriver("[renCamo] "+Message,5.5)}
+        if(Operator!=owner()) {hint("[renCamo] "+Message,5.5)}
+    }
+
+    #[Prints to the operator, or the owner, the message
+    Inputs:
+        Message [STRING] - Prints to the chat of either the operator or the Owner
+    ]#
+    function void operatorTell(Message:string)
+    {
+        if(Operator:isPlayer()) {Operator:vehicle():printDriver("[renCamo] "+Message)}
+        if(Operator!=owner()) {print("[renCamo] "+Message)}
+    }
+    
+    function number entity:checkSphericalWheel()
+    {
+        local Radius = This:radius()
+        if(Radius < 10) {return 0}
+        local Box = This:boxSize()
+        if(Box[1] == Box[2])
+        {
+            if(Box[2] == Box[3])
+            {
+                if(Box[3] == Box[1])
+                {
+                    return 1
+                }
+                else
+                {
+                    return 0
+                }
+            }
+            else
+            {
+                return 0
+            }
+        }
+        else
+        {
+            return 0
+        }
+    }
+
+
+
+    #/////INITILIZE CAMO STUFF\\\\\#
+    #Get the stuff
+    msgBusIn()
+
+    #He did it so I did it
+    local Red    = vec(255,0,0)
+    local Green  = vec(0,255,0)
+    local Blue   = vec(0,0,255)
+    local Yellow = vec(255,255,0)
+    local Teal   = vec(0,255,255)
+    local Purple = vec(255,0,255)
+
+    #Crawl through the vehicle, serparate out the colours
+    foreach(C,E:entity = Self)
+    {
+        switch(E:getColor())
+        {
+            case Red,    REDS:unshiftEntity(E) break
+            case Blue,   BLUES:unshiftEntity(E) break
+            case Green,  GREENS:unshiftEntity(E) break
+            case Yellow, YELLOWS:unshiftEntity(E) break
+            case Teal,   TEALS:unshiftEntity(E) break
+            case Purple, PURPLES:unshiftEntity(E) break
+
+            default, break
+        }
+    }
+    
+    foreach(B,E:entity = Self)
+    {
+        if((E:type()=="prop_physics")&(E:getMaterial()=="sprops/textures/sprops_metal6")) {if(E:boxSize():length() > 30) {BUSHCANDIDATES:unshiftEntity(E)}}
+    }
+    
+    BUSHMODELS = array("models/sprops/cylinders/size_5/cylinder_12x3.mdl","models/XQM/airplanewheel1medium.mdl","models/sprops/geometry/sphere_30.mdl","models/sprops/misc/domes/size_2/dome_24x12.mdl","models/sprops/misc/oblong2_hq.mdl")
+
+
+
+    #/////FINISHED\\\\\#
+    #Relies entirely on chat commands, we need this
+    runOnChat(1)
+
+    #Set the version number and name of the E2
+    VERSION = "V1.1.1"
+    setName("renCamo "+VERSION)
+
+    #Tell whoever is in charge that we are done
+    operatorNotify("Ready! Say \"camo list\" for a list of Camo Sets.")
+
+    #Tell the bus that we exist! (Experimental)
+    MSGBUS["NODE_NAMES",array]:pushString(entity():getName())
+}
+
+
+
+#/////UPDATE BUS\\\\\#
+#If an input has caused the E2 to update, grab new stuff from the MSGBUS
+elseif(inputClk())
+{
+    msgBusIn()
+
+    if(changed(FLIR))
+    {
+        local Players = players()
+        for(H=1,MAXBUSHES) {if(holoEntity(H)) {holoVisible(H,Players,1) holoVisible(H,Operator,!FLIR)} else{break}}
+    }
+}
+
+
+
+#/////CAMO STUFF\\\\\#
+#If the owner has caused the E2 to update via chat, do all of the fancy camo stuff
+elseif(chatClk(owner())|chatClk(Operator))
+{
+    #Get what the owner last said and process it down to form(s) we can use
+    local Said = owner():lastSaid()
+    if(chatClk(Operator)&Operator:isPlayer()) {Said = Operator:lastSaid()} #Use what the operator said if he's the one who triggered it
+    Said = Said:lower()
+    local Split = Said:explode(" ")
+    local Token = Split:string(1)
+    local Command = Split:string(2)
+    local Arg1 = Split:string(3)
+
+    #If we say the thing first, ittl do more things
+    if(Token == "camo")
+    {
+        #Preset all of the variables which will be used later on
+        local Change = 1 #Gets set to 0 if we were using a command, or an invalid camo
+        local AutoMix = 1 #Automanically mixes the other colours if youre lazy
+        local Materials = array() #Array of materials
+        local Red = vec(255,0,0) #Defaults.
+        local Blue = vec(0,0,255)
+        local Green = vec(0,255,0)
+        local Yellow = vec(255,255,0)
+        local Teal = vec(0,255,255)
+        local Purple = vec(255,0,255)
+        local BushEnable = 0
+        local Bush = ""
+        local BushCol = vec(255)
+        local Name = "None"
+        
+        #models/props_foliage/ivy01
+        #models/props_hive/websackhalf
+        #models/props_foliage/vines01
+        #models/props_farm/tree_leaves001
+
+        #The more things ittl do
+        switch (Command)
+        {
+            #!!!!!!!!!!ESSENTIALS!!!!!!!!!!#
+            #Prints out the version number to the operator
+            case "version",
+            case "ver",
+                operatorNotify(VERSION+".")
+                hideChat(1)
+                Change = 0
+            break
+
+            #Resets the E2
+            case "reset",
+            case "res",
+                operatorNotify("Resetting.")
+                for(I=1,4) {Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "sprops/textures/sprops_metal6"}
+                AutoMix = 0
+                #Resetting is done after the camo has been reset
+            break
+
+            #Lists all available camo sets
+            case "list",
+            case "lis",
+                if(Arg1)
+                {
+                    if(CAMO_LIST:exists(Arg1)) {operatorTell(Arg1+": "+CAMO_LIST[Arg1,string])}
+                    else{operatorTell("No camo list entry found for "+Arg1+", use list for a list of camo sets.")}
+                }
+
+                else{operatorNotify("Camo Sets: essential, default, old, zt, renco, ghosteh, gregtech.")}
+                hideChat(1)
+                Change = 0
+            break
+
+            #Undoes the last camo to stock
+            case "undo",
+            case "und",
+                for(I=1,4) {Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "sprops/textures/sprops_metal6"}
+                AutoMix = 0
+            break
+
+
+
+            #!!!!!!!!!!DEFAULT CAMO SET!!!!!!!!!!#
+            case "drab",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "WTP/camoflage_1" }
+                Red = vec(139,145,102)
+                Blue = vec(94,98,71)
+                Green = vec(118,130,104)*0.75
+                Name = "Patterned Olive Drab"
+            break
+
+            case "snow",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "models/props_canal/coastmap_sheet" }
+                Red = vec(255,255,255)
+                Blue = vec(231,231,239)
+                Green = vec(212,214,224)
+                Name = "Snow"
+            break
+
+            case "digisnow",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "WTP/camoflage_3" }
+                Red = vec(255,255,255)
+                Blue = vec(231,231,239)
+                Green = vec(148,149,154)
+                Name = "Digital Snow"
+            break
+ 
+            case "woodland",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "WTP/camoflage_2" }
+                Red = vec(184,182,168)
+                Blue = vec(190)
+                Green = vec(125,122,94)
+                Name = "Woodland"
+            break
+
+            case "stripe",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "WTP/camoflage_4" }
+                Red = vec(184,182,168)
+                Blue = vec(190)
+                Green = vec(125,122,94)
+                Name = "Stripe"
+            break
+
+            case "flatdrab",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "models/props_building_details/courtyard_template001c_bars" }
+                Red = vec(110,118,101)
+                Blue = vec(118,130,104)
+                Green = vec(118,130,104)*0.75
+                Name = "Flat Olive Drab"
+            break
+
+            case "slate",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "phoenix_storms/concrete0" }
+                Red = vec(80,80,69)
+                Blue = vec(92,92,79)
+                Green = vec(90,90,77)*0.75
+                Name = "Slate"
+            break
+
+            case "sand",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "models/props_debris/building_template010a" }
+                Red = vec(184,173,144)
+                Blue = vec(184,173,144) * 0.8
+                Green = vec(192,182,153)
+                Name = "Sand"
+            break
+
+            case "lightsand",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "phoenix_storms/construct/concrete_barrier2_00" }
+                Red = vec(248,237,204)
+                Blue = vec(233,218,204)
+                Green = vec(192,182,153)
+                Name = "Light Sand"
+            break
+
+            case "drabsand",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "models/props_debris/building_template010a" }
+                Red = vec(115,109,92)
+                Blue = vec(94,90,76)
+                Green = vec(115,109,92)*0.75
+                Name = "Drab Sand"
+            break
+
+            case "gray",
+            case "grey", #Who knew you could do that?
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "phoenix_storms/concrete0" }
+                Red = vec(120,127,132)
+                Blue = vec(110,121,129)
+                Green = vec(80,84,88)
+                Name = "German Grey"
+            break
+
+            case "brown",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "phoenix_storms/concrete0" }
+                Red = vec(73,62,49)
+                Blue = vec(80,71,62)
+                Green = vec(58,53,45)
+                Name = "Dark Brown"
+            break
+
+            case "blue",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "models/props_debris/building_template010a" }
+                Red = vec(64,128,255)
+                Blue = vec(76,160,235)
+                Green = vec(64,64,64)
+                Name = "Allied Blue"
+            break
+
+            case "red",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "models/props_debris/building_template010a" }
+                Red = vec(200,64,64)
+                Blue = vec(180,55,55)
+                Green = vec(64,64,64)
+                Name = "Soviet Red"
+            break
+
+            case "yellow",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "models/props_debris/building_template010a" }
+                Red = vec(255,255,64)
+                Blue = vec(224,224,96)
+                Green = vec(64,64,64)
+                Name = "GDI Gold"
+            break
+
+            case "teal",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "models/props_debris/building_template010a" }
+                Red = vec(140,230,255)
+                Blue = vec(116,206,255)
+                Green = vec(64,64,64)
+                Name = "NOD Light Blue"
+            break
+
+            case "police",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "sprops/textures/sprops_metal5" }
+                Red = vec(255,255,255)
+                Blue = vec(64,64,255)
+                Green = vec(224,224,224)
+                Name = "Police"
+            break
+
+            case "tronred",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "models/props_debris/building_template010a" }
+                Red = vec(72,72,72)
+                Blue = vec(66,66,66)
+                Green = vec(255,0,0)
+                Name = "Cool Tron Red"
+            break
+
+            case "tronblue",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "models/props_debris/building_template010a" }
+                Red = vec(72,72,72)
+                Blue = vec(66,66,66)
+                Green = vec(0,0,255)
+                Name = "Cool Tron Blue"
+            break
+
+            case "trongreen",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "models/props_debris/building_template010a" }
+                Red = vec(72,72,72)
+                Blue = vec(66,66,66)
+                Green = vec(0,255,0)
+                Name = "Cool Tron Green"
+            break
+
+            case "prep",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "phoenix_storms/concrete0" }
+                Red = vec(255,255,255)
+                Blue = vec(224,224,232)
+                Green = vec(125,125,125)
+                Name = "Pre-Production"
+            break
+
+            case "takei",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "models/props_debris/building_template010a" }
+                Red = vec(255,153,214)
+                Blue = vec(140,255,220)
+                Green = vec(245,255,155)
+                Name = "Takei"
+            break
+
+            case "concrete",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "phoenix_storms/construct/concrete_barrier2_00" }
+                Red = vec(128,122,112)*0.5
+                Blue = vec(165,158,147)*0.6
+                Green = vec(128,122,112)*0.667
+                Name = "Concrete"
+            break
+
+
+
+            #!!!!!!!!!!OLD CAMO SET!!!!!!!!!!#
+            case "oldurban",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "models/props_building_details/courtyard_template001c_bars"}
+                Red   = vec(133,133,133)
+                Blue  = vec(100,100,100)
+                Green = vec(100,100,100)
+                Name = "Old Urban"
+            break
+
+            case "oldsummer",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "models/props_building_details/courtyard_template001c_bars"}
+                Red   = vec(168,175,125)
+                Blue  = vec(128,133,94)
+                Green = vec(168,175,125)
+                Name = "Old Summer"
+            break
+
+            case "olddesert",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "models/props_building_details/courtyard_template001c_bars"}
+                Red   = vec(255,255,185)
+                Blue  = vec(200,200,150)
+                Green = vec(255,255,185)
+                Name = "Old Desert"
+            break
+
+            case "oldsnow",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "models/props/cs_office/snowmana"}
+                Red   = vec(255,255,255)
+                Blue  = vec(180,180,180)
+                Green = vec(255,255,255)
+                Name = "Old Snow"
+            break
+
+            case "oldprep",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "models/props_forest/cliff_detail"}
+                Red   = vec(200,200,200)
+                Blue  = vec(200,200,200)
+                Green = vec(150,150,150)
+                Name = "Old Prep"
+            break
+
+            case "oldgerman",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "sprops/textures/sprops_metal3"}
+                Red   = vec(109,109,109)
+                Blue  = vec(145,145,145)
+                Green = vec(182,182,182)
+                Name = "Old German"
+            break
+
+
+
+            #!!!!!!!!!!ZINETECH CAMO SET!!!!!!!!!!#
+            #By: Renco obviously
+            case "ztgrass",
+                for(I=1,2) { Materials[select(I,RED,BLUE),string] = "models/props_debris/plasterwall040c"}
+                for(I=1,2) { Materials[select(I,YELLOW,TEAL),string] = "models/props_debris/plasterwall034a"}
+                Red = vec(106,120,62) #Red
+                Blue = vec(130,150,60) #Blue
+                Green = vec(80,90,25) #Green
+                Yellow = vec(111,127,62) #Yellow
+                Teal = vec(126,145,70) #Teal
+                Purple = vec(100,120,50) #Purple
+                AutoMix = 0
+                BushEnable = 1
+                Bush = "models/props_foliage/vines01"
+                Name = "ZineTech Grass"
+            break
+
+
+
+            #!!!!!!!!!!RENCO'S CAMO SET!!!!!!!!!!#
+            case "gold",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "models/player/shared/gold_player"}
+                Red=Blue=Green=Yellow=Teal=Purple = vec(255)
+                AutoMix = 0
+                Name = "Shiny Gold"
+            break
+
+            case "silver",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "debug/env_cubemap_model"}
+                Red=Blue=Green=Yellow=Teal=Purple = vec(255)
+                AutoMix = 0
+                Name = "Shiny Silver"
+            break
+
+            case "rust",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "WTP/metal_2c"}
+                Red=Blue=Green = vec(244,223,219)
+                Name = "Rusty Steel"
+            break
+
+            case "phx",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "hunter/myplastic"}
+                Red=Blue=Green=Yellow=Teal=Purple = vec(255)
+                AutoMix = 0
+                Name = "Pheonix Storms"
+            break
+
+            case "sprops",
+                for (I=1,2) {Materials[select(I,RED,YELLOW),string] = "sprops/sprops_grid"}
+                for (I=1,2) {Materials[select(I,BLUE,TEAL),string] = "sprops/sprops_grid_orange"}
+                Red=Blue=Green=Yellow=Teal=Purple = vec(255)
+                AutoMix = 0
+                Name = "Sprops"
+            break
+
+            case "glass",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "models/props_trainstation/Trainstation_Clock_Glass001"}
+                Red   = vec(128,122,112)*0.5
+                Blue  = vec(165,158,147)*0.6
+                Green = vec(128,122,112)*0.667 #Where the fuck did I get these numbers?
+                Name = "Glass"
+            break
+
+            case "tronteal",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "models/props_debris/building_template010a"}
+                Red   = vec(72,72,72)
+                Blue  = vec(66,66,66)
+                Green = vec(0,128,128)
+                Name = "Cool Tron Teal"
+            break
+
+            case "japan",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "phoenix_storms/concrete0"}
+                Red=Blue=Green = vec(129,159,99)
+                Name = "Japanese Green"
+            break
+
+            case "vandal",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "models/props_hive/larval_essence/larval_essence"}
+                Red=Blue=Yellow=Teal = vec(255)
+                Green=Purple = vec(10,94,100)*1.3
+                AutoMix = 0
+                Name = "Vandal"
+            break
+
+            case "shield",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "models/props_combine/sphere"}
+                Red=Blue=Green=Yellow=Teal=Purple = vec(255)
+                AutoMix = 0
+                Name = "EP2 Shield"
+            break
+
+            case "dab",
+                Materials[RED,string]    = "ttp/decals/decal_emoji_laughing2"
+                Materials[BLUE,string]   = "ttp/decals/decal_emoji_ok"
+                Materials[YELLOW,string] = "ttp/decals/decal_emoji_laughing"
+                Materials[TEAL,string]   = "ttp/decals/decal_emoji_100"
+                Red=Blue=Yellow=Teal = vec(255)
+                Green=Purple = vec(255,204,51)
+                Name = "Why"
+            break
+
+            case "renco",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "models/props_debris/building_template010a"}
+                Red = vec(100,126,255)
+                Blue = vec(100,126,255)*1.5
+                Green = vec(100,126,255)*1.8
+                Name = "Renco Blue"
+            break
+
+            case "screenspace",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "models/screenspace"}
+                Red=Blue=Green=Yellow=Teal=Purple = vec(255)
+                AutoMix = 0
+                Name = "Sreenspace"
+            break
+
+            case "grassland",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "phoenix_storms/ps_grass"}
+                Red = vec(255)
+                Blue = vec(245)
+                Green = vec(112,129,84)
+                Name = "Grassland"
+            break
+
+            case "swedart",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "ttp/camoflagues/camo_swedish_winter"}
+                Red=Blue=Green=Yellow=Teal=Purple = vec(255)
+                AutoMix = 0
+                Name = "Swedish Artic"
+            break
+
+            case "gerdes",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "ttp/camoflagues/camo_german_desert"}
+                Red=Blue=Green=Yellow=Teal=Purple = vec(255)
+                AutoMix = 0
+                Name = "German Desert"
+            break
+
+            case "gercar",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "ttp/camoflagues/camo_german_carc"}
+                Red=Blue=Yellow=Teal = vec(255)
+                Green = vec(87,51,32)
+                Purple = vec(57,63,41)
+                AutoMix = 0
+                Name = "German Carc"
+            break
+
+            case "zimsand",
+                for (I=1,2) { Materials[select(I,RED,YELLOW),string] = "ttp/surfaces/surface_zimmerit_horizontal"}
+                for (I=1,2) { Materials[select(I,BLUE,TEAL),string] = "models/props_debris/building_template010a"}
+                Red = vec(184,173,144)
+                Blue = vec(184,173,144)*0.8
+                Green = vec(192,182,153)
+                Name = "Zimmerit Sand"
+            break
+
+            case "zimsnow",
+                for (I=1,2) { Materials[select(I,RED,YELLOW),string] = "ttp/surfaces/surface_zimmerit_horizontal"}
+                for (I=1,2) { Materials[select(I,BLUE,TEAL),string] = "models/props_debris/plasterwall034a"}
+                Red = vec(255)
+                Blue = vec(255,250,250)
+                Green = vec(54)
+                Name = "Zimmerit Snow"
+            break
+
+            case "christmas",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "models/props_debris/building_template010a"}
+                Red = vec(255,50,50)
+                Blue = vec(255,150,150)
+                Green=Teal = vec(255)
+                Yellow = vec(255,170,170)
+                Purple = vec(255,100,100)
+                AutoMix = 0
+                Name = "Christmas"
+            break
+
+            case "cheblue",
+                for (I=1,2) { Materials[select(I,RED,YELLOW),string] = "ttp/camoflagues/camo_swedish_winter"}
+                for (I=1,2) { Materials[select(I,BLUE,TEAL),string] = "WTP/metal_2"}
+                Red=Blue=Teal=Yellow=Purple = vec(0,174,255)
+                Green = vec(255)
+                AutoMix = 0
+                Name = "Cheese Blue"
+            break
+
+
+
+            #!!!!!!!!!!GHOSTEH'S CAMO SET!!!!!!!!!!#
+            case "m63f",
+                for (I=1,2) { Materials[select(I,RED,BLUE),string] = "models/props_debris/plasterwall040c"}
+                for (I=1,2) { Materials[select(I,YELLOW,TEAL),string] = "models/props_debris/plasterwall034a"}
+                Red = vec(95,100,75)    
+                Blue = vec(80,85,60)
+                Green = vec(64,64,64) #Green = vec(85,90,65)
+                Name = "M/63 Field"
+            break
+
+            case "m63lf",
+                for (I=1,2) { Materials[select(I,RED,BLUE),string] = "models/props_debris/plasterwall040c"}
+                for (I=1,2) { Materials[select(I,YELLOW,TEAL),string] = "models/props_debris/plasterwall034a"}
+                Red = vec(104,117,84) 
+                Blue = vec(87,103,74) 
+                Green = vec(64,64,64) #Green = vec(72,78,58)
+                Name = "M/63 Light Field"
+            break      
+
+            case "m63u",
+                for (I=1,2) { Materials[select(I,RED,BLUE),string] = "models/props_debris/plasterwall040c"}
+                for (I=1,2) { Materials[select(I,YELLOW,TEAL),string] = "models/props_debris/plasterwall034a"}
+                Red = vec(95,90,80)    
+                Blue = vec(80,75,65)
+                Green = vec(64,64,64) #Green = vec(85,80,70)
+                Name = "M/63 Urban"
+            break
+
+            case "m63d",
+                for (I=1,2) { Materials[select(I,RED,BLUE),string] = "models/props_debris/plasterwall040c"}
+                for (I=1,2) { Materials[select(I,YELLOW,TEAL),string] = "models/props_debris/plasterwall034a"}
+                Red = vec(184,173,144)
+                Blue = vec(184,173,144) * 0.8
+                Green = vec(155,155,155) #Green = vec(192,182,153)
+                Name = "M/63 Desert"
+            break
+
+            case "m63ld",
+                for (I=1,2) { Materials[select(I,RED,BLUE),string] = "models/props_debris/plasterwall040c"}
+                for (I=1,2) { Materials[select(I,YELLOW,TEAL),string] = "models/props_debris/plasterwall034a"}
+                Red = vec(255,239,204)
+                Blue = vec(224,219,185)
+                Green = vec(155,155,155) #Green = vec(224,224,224)
+                Name = "M/63 Light Desert"
+            break
+            
+            case "m63c",
+                for (I=1,2) { Materials[select(I,RED,BLUE),string] = "models/props_debris/plasterwall040c"}
+                for (I=1,2) { Materials[select(I,YELLOW,TEAL),string] = "models/props_debris/plasterwall034a"}
+                Red = vec(135,150,155)    
+                Blue = vec(115,130,135)
+                Green = vec(64,64,64) #Green = vec(135,150,155)
+                Name = "M/63 Carrier"
+            break
+
+            case "m63n",
+                for (I=1,2) { Materials[select(I,RED,BLUE),string] = "models/props_debris/plasterwall040c"}
+                for (I=1,2) { Materials[select(I,YELLOW,TEAL),string] = "models/props_debris/plasterwall034a"}
+                Red = vec(50,55,65)    
+                Blue = vec(40,45,55)
+                Green = vec(64,64,64) #Green = vec(50,55,65)
+                Name = "M/63 Navy"
+            break
+
+            case "m63tr",
+                for (I=1,2) { Materials[select(I,RED,BLUE),string] = "models/props_debris/plasterwall040c"}
+                for (I=1,2) { Materials[select(I,YELLOW,TEAL),string] = "models/props_debris/plasterwall034a"}
+                Blue = (vec(104,117,84)+vec(104,117,84)+vec(255,239,204))/3
+                Red = ((vec(255,239,204)*2)+vec(104,117,84))/3
+                Green = vec(64,64,64) #Green = (vec(72,78,58)+vec(224,224,224))/2
+                Name = "M/63 Tropic"
+            break
+
+            case "m63a",
+                for (I=1,2) { Materials[select(I,RED,BLUE),string] = "models/props_debris/plasterwall040c"}
+                for (I=1,2) { Materials[select(I,YELLOW,TEAL),string] = "models/props_debris/plasterwall034a"}
+                Red = vec(255,255,255)
+                Blue = vec(255,250,250)
+                Green = vec(64,64,64) #Green = vec(250,255,255)
+                Name = "M/63 Arctic"
+            break
+
+            case "m51lf",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "models/props_debris/building_template010a"}
+                Red = vec(104,117,84)
+                Blue = vec(87,103,74) / 1.1
+                Green = vec(54,54,54) #Green = vec(72,78,58)
+                Name = "M/51 Light Field"
+            break      
+
+            case "m51f",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "models/props_debris/building_template010a"}
+                Red = vec(95,100,75)    
+                Blue = vec(80,85,60)
+                Green = vec(54,54,54) #Green = vec(85,90,65)
+                Name = "M/51 Field"
+            break
+
+            case "m51u",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "models/props_debris/building_template010a"}
+                Red = vec(95,90,80)    
+                Blue = vec(80,75,65)
+                Green = vec(54,54,54) #Green = vec(85,80,70)
+                Name = "M/51 Urban"
+            break
+
+            case "m51d",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "models/props_debris/building_template010a"}
+                Red = vec(210, 180, 140)
+                Blue = vec(190,160,120)
+                Green = vec(145,145,145) #Green = vec(210,180,140)
+                Name = "M/51 Desert"
+            break
+
+            case "m51ld",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "models/props_debris/building_template010a"}
+                Red = vec(255,239,204)
+                Blue = vec(224,219,185)
+                Green = vec(145,145,145) #Green = vec(224,224,224)
+                Name = "M/51 Light Desert"
+            break
+
+            case "m51c",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "models/props_debris/building_template010a"}
+                Red = vec(135,150,155)    
+                Blue = vec(115,130,135)
+                Green = vec(54,54,54) #Green = vec(135,150,155)
+                Name = "M/51 Carrier"
+            break
+
+            case "m51n",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "models/props_debris/building_template010a"}
+                Red = vec(50,55,65)    
+                Blue = vec(40,45,55)
+                Green = vec(54,54,54) #Green = vec(50,55,65)
+                Name = "M/51 Navy"
+            break
+
+            case "m51a",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "models/props_debris/building_template010a"}
+                Red = vec(255,255,255)
+                Blue = vec(255,250,250)
+                Green = vec(54,54,54) #Green = vec(250,255,255)
+                Name = "M/51 Arctic"
+            break
+
+            case "m51tr",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "models/props_debris/building_template010a"}
+                Blue = (vec(104,117,84)+vec(104,117,84)+vec(255,239,204))/3
+                Red = ((vec(255,239,204)*2)+vec(104,117,84))/3
+                Green = vec(54,54,54) #Green = (vec(72,78,58)+vec(224,224,224))/2
+                Name = "M/51 Tropic"
+            break
+
+
+
+            #!!!!!!!!!!GREGTECH MATERIALS CAMO SET!!!!!!!!!!#
+            case "wfe",
+                for (I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "WTP/metal_5"}
+                Red = vec(99,99,158)
+                Green = vec(78,78,124)
+                Blue = vec(78,78,124)
+                Name = "GregTech Tungstensteel"
+            break
+
+            case "os",
+                for(I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "WTP/metal_5"}
+                Red = vec(49,49,252)
+                Green = vec(39,39,198)
+                Blue = vec(41,41,208)
+                Name = "GregTech Osmium"
+            break
+
+            case "ti",
+                for(I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "WTP/metal_5"}
+                Red = vec(217,158,237)
+                Green = vec(180,131,196)
+                Blue = vec(171,124,186)
+                Name = "GregTech Titanium"
+            break
+
+            case "al",
+                for(I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "WTP/metal_5"}
+                Red = vec(126,198,237)
+                Green = vec(99,155,186)
+                Blue = vec(99,155,186)
+                Name = "GregTech Aluminium"
+            break
+
+            case "fe50c",
+                for(I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "WTP/metal_5"}
+                Red = vec(126,126,126)
+                Green = vec(105,105,105)
+                Blue = vec(99,99,99)
+                Name = "GregTech Steel"
+            break
+
+            case "fe",
+                for(I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "WTP/metal_5"}
+                Red = vec(181,163,163)
+                Green = vec(163,147,147)
+                Blue = vec(155,140,140)
+                Name = "GregTech Wrought Iron"
+            break
+
+            case "cu3sn",
+                for(I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "WTP/metal_5"}
+                Red = vec(252,126,0)
+                Green = vec(208,105,0)
+                Blue = vec(198,99,0)
+                Name = "GregTech Bronze"
+            break
+
+            case "ta4hfc5",
+                for(I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "WTP/metal_5"}
+                Red = vec(28,111,28)
+                Green = vec(22,88,22)
+                Blue = vec(21,86,21)
+                Name = "GregTech Tantalum Hafnium Carbide"
+            break
+
+            case "cu3agau",
+                for(I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "WTP/metal_5"}
+                Red = vec(94,47,117)
+                Green = vec(87,43,108)
+                Blue = vec(69,34,86)
+                Name = "GregTech Black Bronze"
+            break
+
+            case "fe2ni",
+                for(I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "WTP/metal_5"}
+                Red = vec(206,206,141)
+                Green = vec(191,191,130)
+                Blue = vec(152,152,103)
+                Name = "GregTech Invar"
+            break
+
+            case "pt",
+                for(I=1,4) { Materials[select(I,RED,BLUE,YELLOW,TEAL),string] = "WTP/metal_5"}
+                Red = vec(94,169,234)
+                Green = vec(87,156,217)
+                Blue = vec(76,137,190)
+                Name = "GregTech Platinum"
+            break
+
+
+
+            #!!!!!!!!!!INVALID CAMO SCHEME!!!!!!!!!!#
+            default,
+                operatorNotify("Camo Scheme "+Command+" not found.")
+                hideChat(1)
+                Change = 0
+            break
+        }
+
+        #If we have changed camos, update the camos
+        if(Change)
+        {
+            #Hide the chat per ususal
+            hideChat(1)
+
+            #Auto mix the thang
+            if(AutoMix)
+            {
+                Yellow = (Red+Red+Blue)/3
+                Teal   = (Red+Blue+Blue)/3
+                Purple = (Green+(Red+Blue)*0.35)*0.8
+            }
+
+            #Goes through each colour set and sets the materials and colours to the new camo
+            foreach(I,E:entity = REDS)    {E:setMaterial(Materials[RED,string]) E:setColor(Red)}
+            foreach(I,E:entity = BLUES)   {E:setMaterial(Materials[BLUE,string]) E:setColor(Blue)}
+            foreach(I,E:entity = GREENS)  {E:setColor(Green)}
+            foreach(I,E:entity = YELLOWS) {E:setMaterial(Materials[YELLOW,string]) E:setColor(Yellow)}
+            foreach(I,E:entity = TEALS)   {E:setMaterial(Materials[TEAL,string]) E:setColor(Teal)}
+            foreach(I,E:entity = PURPLES) {E:setColor(Purple)}
+            
+            if(BushEnable)
+            {
+                local Bushes = 1
+                foreach(K,B:entity = BUSHCANDIDATES)
+                {
+                    if(Bushes >= MAXBUSHES) {break}
+                    else
+                    {
+                        local RNG = randint(1,100)
+                        if(RNG > 50)
+                        {
+                            #holoCreate(Bushes,B:pos(),vec(random(0.5,1.5)),B:toWorld(ang(0,0,90)),BushCol,BUSHMODELS[randint(1,BUSHMODELS:count()),string])
+                            holoCreate(Bushes,B:toWorld(randvec(B:boxMin(),B:boxMax())),vec(random(0.5,1.5)),B:toWorld(ang(randvec(vec(0),vec(180)))),BushCol,BUSHMODELS[randint(1,BUSHMODELS:count()),string])
+                            holoParent(Bushes,B)
+                            holoMaterial(Bushes,Bush)
+                            Bushes++
+                        }
+                    }
+                }
+            }
+            else{holoDeleteAll()}
+
+            #Play a suitable spraying sound
+            soundPlay("spray",2,"player/sprayer.wav")
+
+            #Set the name of the E2 to include the curren camo
+            setName("renCamo "+VERSION+"\n"+
+            "Current camo: "+Name+" ("+Command+")")
+
+            #This is how we reset, wont notify the owner if we're resetting because we've already notified
+            if((Command == "reset")|(Command == "res")) {reset()} else{operatorNotify(Name+".")}
+        }
+    }
+}

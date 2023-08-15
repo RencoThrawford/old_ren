@@ -1,0 +1,323 @@
+@name renCover
+@inputs [MSGBUS]:table
+@persist [Gunner Driver]:entity [Self]:array
+@persist [COVERALPHA]:number
+@persist [USINGPOLE]:number [VERSION]:string [POLEREFS HOLOREFS COVERREFS]:array
+@persist [Covered]:number
+@trigger [MSGBUS]
+@model models/props_c17/signpole001.mdl
+runOnKeys(Gunner,1)
+runOnKeys(Driver,1)
+#[
+E2 By:
+    Renco - Nearly Everything
+    Red - MSGBUS, Ideas
+
+!!!!!
+REALLY DO-NOT RE-DISTRIBUTE!
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+This E2 may allow you to hide better by placing a camo netting at your position
+Camo netting also changes it's size based on your baseplate, settings provided to make fine adjustments
+
+
+
+//////////VERSION LOG\\\\\\\\\\
+V0.0.0 (10-29-20) - Initial Development
+V1.0.0 (10-29-20) - Functionally Complete
+V1.0.1 (10-29-20)
+    [FIXED] Fixed cover being visible after dupe has spawned
+    [FIXED] Fixed cover not covering when asked
+
+
+
+//////////TO-DO\\\\\\\\\\
+Sound when deploying
+Have it appear at your location instead of being parented
+    Mode?
+Find good material for covers
+
+/////DONE\\\\\
+
+
+//////////MSGBUS\\\\\\\\\\
+/////MSGBUS INPUTS\\\\\
+GUNNER [ENTITY] - Gunner who can control the cover
+DRIVER [ENTITY] - Driver who can control the cover
+SELF   [ARRAY]  - Array of all constrainted/connected props
+
+/////MSGBUS OUTPUTS\\\\\
+]#
+
+
+#//////////INITIALIZATION\\\\\\\\\\#
+#Reset the E2 if we have been duped or the dupe has finished spawning
+if(duped()|dupefinished()) {reset()}
+
+if(first())
+{
+    #/////SETTINGS\\\\\#
+    #When in doubt, default it out
+    #//CAMO\\#
+    #Changes what color the poles will be set to
+    local PoleColor = "red" #Default: "red"
+    #Only used if you choose green/purple
+    local PoleMaterial = "models/props_debris/plasterwall034a" #Default: "models/props_debris/plasterwall034a"
+
+    #Changes what color the covers will be set to
+    local CoverColor = "green" #Default: "green"
+    #Only used if you choose green/purple
+    local CoverMaterial = "models/props_debris/plasterwall040c" #Default: 
+
+    #Changes how transparent the covers are
+    COVERALPHA = 120 #Default: 120
+
+    #//HOLOS\\##
+    #Changes the position relative to the base
+    local PosOffset = vec(0,0,25) #Default: vec(0)
+
+    #Multiples the scale relative to base size
+    local ScaleMul = vec(0.8,0.8,1) #Default: vec(1)
+
+    #Turns on/off the side panels
+    local Sides = 1 #Default: 1
+
+
+    #//MISC\\#
+    #Changes at what index the holograms start to spawn at
+    local Index = 0 #Default: 0
+
+    #Wether or not the cover is on my default, you can use this to test the looks
+    Covered = 0 #Default: 0
+
+
+    #/////LIBRARIES\\\\\#
+    #include "renHoloCamoLib"
+    #include "renKeyLib"
+
+
+
+    #/////FUNCTIONS\\\\\#
+    #Gets the things we need all the time
+    function void msgBusIn()
+    {
+        if(->MSGBUS)
+        {
+            Gunner = MSGBUS["GUNNER",entity]
+            Driver = MSGBUS["DRIVER",entity]
+            Self   = MSGBUS["SELF",array]
+        }
+    }
+
+
+
+    #/////INITIALIZE VARIABLES\\\\\#
+    #Shenanigans
+    USINGPOLE = (entity():model()=="models/props_c17/signpole001.mdl")
+
+    #The cause of the weird layout
+    #Gets the base, then the scale
+    msgBusIn()
+    local Base = Self[1,entity]
+    local BaseScale = Base:boxSize()
+
+
+
+    #/////HOLOGRAMS\\\\\#
+    #Only do holos if we have a base, so people don't end up with random holos on their shit
+    if(Base:isValidPhysics())
+    {
+        #Front Left
+        holoCreate(Index)
+        holoModel(Index,"models/props_c17/signpole001.mdl")
+        holoAng(Index,Base:angles())
+        holoPos(Index,Base:toWorld((vec(BaseScale:x(),BaseScale:y(),0)*ScaleMul)-PosOffset))
+        holoScale(Index,vec(1,1,1*ScaleMul:z()))
+        holoParent(Index,Base)
+        POLEREFS:pushNumber(Index)
+        HOLOREFS:pushNumber(Index)
+        Index++
+
+        #Front Right
+        holoCreate(Index)
+        holoModel(Index,"models/props_c17/signpole001.mdl")
+        holoAng(Index,Base:angles())
+        holoPos(Index,Base:toWorld((vec(BaseScale:x(),-BaseScale:y(),0)*ScaleMul)-PosOffset))
+        holoScale(Index,vec(1,1,1*ScaleMul:z()))
+        holoParent(Index,Base)
+        POLEREFS:pushNumber(Index)
+        HOLOREFS:pushNumber(Index)
+        Index++
+
+        #Rear Left
+        holoCreate(Index)
+        holoModel(Index,"models/props_c17/signpole001.mdl")
+        holoAng(Index,Base:angles())
+        holoPos(Index,Base:toWorld((vec(-BaseScale:x(),BaseScale:y(),0)*ScaleMul)-PosOffset))
+        holoScale(Index,vec(1,1,1*ScaleMul:z()))
+        holoParent(Index,Base)
+        POLEREFS:pushNumber(Index)
+        HOLOREFS:pushNumber(Index)
+        Index++
+
+        #Rear Right
+        holoCreate(Index)
+        holoModel(Index,"models/props_c17/signpole001.mdl")
+        holoAng(Index,Base:angles())
+        holoPos(Index,Base:toWorld((vec(-BaseScale:x(),-BaseScale:y(),0)*ScaleMul)-PosOffset))
+        holoScale(Index,vec(1,1,1*ScaleMul:z()))
+        holoParent(Index,Base)
+        POLEREFS:pushNumber(Index)
+        HOLOREFS:pushNumber(Index)
+        Index++
+
+
+        #Roof
+        holoCreate(Index)
+        holoModel(Index,"models/props_debris/metal_panel01a.mdl")
+        holoAng(Index,Base:toWorld(ang(90,0,90)))
+        holoPos(Index,Base:toWorld((vec(0,0,102)*ScaleMul))-PosOffset)
+        holoScale(Index,vec(1,(BaseScale:x()/20)*ScaleMul:x(),(BaseScale:y()/55)*ScaleMul:y()))
+        holoParent(Index,Base)
+        holoAlpha(Index,COVERALPHA)
+        HOLOREFS:pushNumber(Index)
+        COVERREFS:pushNumber(Index)
+
+        if(Sides)
+        {
+            Index++
+            #Left Side
+            holoCreate(Index)
+            holoModel(Index,"models/props_debris/metal_panel01a.mdl")
+            holoAng(Index,Base:toWorld(ang(-25,90,90)))
+            holoPos(Index,Base:toWorld((vec(0,BaseScale:y()+22,50)*ScaleMul))-PosOffset)
+            holoScale(Index,vec(1,2.4*ScaleMul:z(),(BaseScale:x()/65)*ScaleMul:x()))
+            holoParent(Index,Base)
+            holoAlpha(Index,COVERALPHA)
+            HOLOREFS:pushNumber(Index)
+            COVERREFS:pushNumber(Index)
+            Index++
+
+            #Right Side
+            holoCreate(Index)
+            holoModel(Index,"models/props_debris/metal_panel01a.mdl")
+            holoAng(Index,Base:toWorld(ang(25,90,90)))
+            holoPos(Index,Base:toWorld((vec(0,-(BaseScale:y()+22),50)*ScaleMul))-PosOffset)
+            holoScale(Index,vec(1,2.4*ScaleMul:z(),(BaseScale:x()/65)*ScaleMul:x()))
+            holoParent(Index,Base)
+            holoAlpha(Index,COVERALPHA)
+            HOLOREFS:pushNumber(Index)
+            COVERREFS:pushNumber(Index)
+            Index++
+
+            #Front Side
+            holoCreate(Index)
+            holoModel(Index,"models/props_debris/metal_panel01a.mdl")
+            holoAng(Index,Base:toWorld(ang(-25,0,90)))
+            holoPos(Index,Base:toWorld((vec(BaseScale:x()+22,0,50)*ScaleMul))-PosOffset)
+            holoScale(Index,vec(1,2.4*ScaleMul:z(),(BaseScale:y()/65)*ScaleMul:y()))
+            holoParent(Index,Base)
+            holoAlpha(Index,COVERALPHA)
+            HOLOREFS:pushNumber(Index)
+            COVERREFS:pushNumber(Index)
+            Index++
+
+            #Front Side
+            holoCreate(Index)
+            holoModel(Index,"models/props_debris/metal_panel01a.mdl")
+            holoAng(Index,Base:toWorld(ang(25,0,90)))
+            holoPos(Index,Base:toWorld((vec(-(BaseScale:x()+22),0,50)*ScaleMul))-PosOffset)
+            holoScale(Index,vec(1,2.4*ScaleMul:z(),(BaseScale:y()/65)*ScaleMul:y()))
+            holoParent(Index,Base)
+            holoAlpha(Index,COVERALPHA)
+            HOLOREFS:pushNumber(Index)
+            COVERREFS:pushNumber(Index)
+        }
+    }
+
+
+    #/////FINALIZE\\\\\#
+    #//CAMO\\#
+    if(USINGPOLE) {POLEREFS:renHCLHoloE2(PoleColor,PoleMaterial)} else{POLEREFS:renHCLHolo(PoleColor,PoleMaterial)}
+    COVERREFS:renHCLHolo(CoverColor,CoverMaterial)
+    foreach(K,G:number = HOLOREFS) {holoAlpha(G,255*Covered)}
+
+    #//VERSION\\#
+    VERSION = "V1.0.1"
+    setName("renCover "+VERSION)
+
+
+    #//FINALIZE MSGBUS\\#
+    #Push the name of this E2 to the bus
+    MSGBUS["NODE_NAMES",array]:pushString(entity():getName())
+}
+
+
+
+#/////////MSGBUS UPDATE\\\\\\\\\#
+elseif(inputClk())
+{
+    msgBusIn()
+}
+
+
+
+#//////////OPERATOR KEYS\\\\\\\\\\#
+#Driver takes lead
+#Just toggles on/off the cover
+elseif(keyClk(Driver))
+{
+    if(!Driver:isTyping())
+    {
+        local Key = keyClkPressed()
+
+        if(Driver:keyPressed(Key)&(Key == RenKL_KEYS["COVER_TOGGLE",string])) {Covered = !Covered}
+    }
+}
+
+#Gunner keys
+#Just toggles on/off the cover
+elseif(keyClk(Gunner))
+{
+    if(!Gunner:isTyping())
+    {
+        local Key = keyClkPressed()
+
+        if(Gunner:keyPressed(Key)&(Key == RenKL_KEYS["COVER_TOGGLE",string])) {Covered = !Covered}
+    }
+}
+
+
+
+#//////////MAIN CODE\\\\\\\\\\#
+#Update visibility/alphas of our cover/pole holograms
+if(changed(Covered))
+{
+    #Determine what alphas everything should be
+    local PoleAlphas = Covered*255
+    local CoverAlphas = Covered*COVERALPHA
+
+    #Turns on/off shadows and does propdraw, honestly, why?
+    for(V=1,HOLOREFS:count())
+    {
+        local CurRef = HOLOREFS[V,number]
+
+        holoShadow(CurRef,Covered)
+
+        #ifdef entity:propDraw(number)
+            holoEntity(CurRef):propDraw(Covered)
+
+            if(USINGPOLE) {entity():propDraw(!Covered)}
+        #endif
+    }
+
+    #Make the E2 disapear if we've deployed and are using the pole E2 model
+    if(USINGPOLE) {entity():setAlpha(Covered ? 0 : 255)}
+
+    #Sets the alpha's of all our holograms
+    for(P=1,POLEREFS:count()) {holoAlpha(POLEREFS[P,number],PoleAlphas)}
+    for(C=1,COVERREFS:count()) {holoAlpha(COVERREFS[C,number],CoverAlphas)}
+}

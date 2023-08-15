@@ -1,0 +1,165 @@
+@name renSCRLBackpack
+@persist [Worn]:number
+@persist [VERSION]:string
+@trigger none
+#[
+E2 By:
+    Renco - rIFFLe Implementation
+    Fervidusletum - Original E2
+
+!!!!!
+RE-DISTRIBUTE I GUESS
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+A modification of Ferv's e2 that implements rIFFLe iff system
+
+
+
+//////////VERSION LOG\\\\\\\\\
+V0.0.0 (10-29-20) - Initial Devloplment
+
+
+
+//////////TO-DO\\\\\\\\\\
+
+/////DONE\\\\\#
+]#
+
+
+#//////////INITIALIZATION\\\\\\\\\#
+#Reset the E2 if we have been duped or the dupe has finished spawning
+if (duped()|dupefinished()) {reset()}
+
+#Making you look suspicious since 20xx
+if(first())
+{
+    #/////LIBRARIES\\\\\#
+    #include "SCRL"
+    #include "renIFFLib"
+    #include "renKeyLib"
+
+
+
+    #/////FUNCTIONS\\\\\#
+    #[Notfies the owner of a message
+    Inputs:
+        Message [STRING] - The message you wish to hint
+    ]#
+    function void notifyOwner(Message:string)
+    {
+        hint("[renSCRLBackpack] "+Message,5.5)
+    }
+
+
+
+    #/////FINALIZATION\\\\\#
+    #//MISC\\#
+    runOnKeys(owner(),1)
+    runOnChat(1)
+    runOnLast(1)
+
+    #Notify the owner how to use this darned thing
+    notifyOwner("Say -attach to wear, -detach to take it off.")
+
+
+    #//VERSION\\#
+    VERSION = "V0.0.0"
+    setName("renSCRLBackpack "+VERSION)
+}
+
+
+
+elseif(chatClk(owner()))
+{
+    local Said = owner():lastSaid():lower()
+    local Token = Said:sub(1,1)
+    local Split = Said:sub(2):explode(" ")
+    local Command = Split[1,string]
+
+    if(Token == "-")
+    {
+        switch(Command)
+        {
+            #Attaching
+            case "wear",
+            case "attach",
+                if(Worn) {break} #Did not know you could break early
+                Worn = 1
+                hideChat(1)
+            break
+
+            #Detaching
+            case "remove",
+            case "detach",
+                if(!Worn) {break}
+                Worn = 0
+                hideChat(1)
+            break
+
+            #SCRL Command
+            default,
+                if(Worn) {scr_chat(owner(),owner():aimPos())}
+                else{hideChat(1) notifyOwner("You need to wear the radio to use it!")}
+            break
+        }
+    }
+}
+
+
+
+elseif(keyClk(owner())&Worn)
+{
+    if(!owner():isTyping())
+    {
+        local Key = keyClkPressed()
+        local Pressed = owner():keyPressed(Key)
+
+        if(Pressed)
+        {
+            local Num = Key:right(1):toNumber()
+
+            if(Key == RenKL_KEYS["INTERROGATE"])
+            {
+                local RIFFLE = renIFFLStart(owner():name(),owner():aimPos(),curtime())
+
+                scr_transmit(5,RIFFLE[1,string],RIFFLE[2,vector],noentity())
+            }
+
+            elseif(Key:left(3) == "pad" & (Num | Key:right(1)=="0"))
+            {
+                scr_keyTransmit(owner(),owner():aimPos())
+            }
+        }
+    }
+}
+
+
+
+elseif(dsClk()&Worn)
+{
+    local SCRLData = scr_recieve(owner())
+
+    local RIFFLE = renIFFLRecieve(SCRLData,owner():name(),owner():pos(),curtime())
+
+    if(RIFFLE:count() == 1)
+    {
+        notifyOwner("Interrogation complete: "+RIFFLE[1,string])
+    }
+
+    elseif(RIFFLE:count() == 3)
+    {
+        notifyOwner("Interrogated by: "+RIFFLE[3,string])
+
+        scr_transmit(5,RIFFLE[1,string],RIFFLE[2,vector],noentity())
+    }
+}
+
+
+
+elseif(last())
+{
+    if(Worn) {entity():deparent()}
+}

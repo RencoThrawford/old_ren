@@ -1,0 +1,283 @@
+@name renFCS
+@inputs [MSGBUS]:table
+@persist [Power_On Lead_On Drift_On Parabolic_Mode Weapons_Free Range]:number [Current_Gun]:entity [Target_Pos Target_Vel Current_Vel]:vector #MSGBUS Inputs
+@persist [Flight_Time]:number [Solution]:vector [Current_Table]:array #MSGBUS Outputs
+@persist [ELEVREFI TABLEREFI]:number [ELEVREFE]:entity [VERSION]:string [STATUSES]:array [MISSILETABLES]:table
+@persist [IDLE_FREQUENCY ACTIVE_FREQUENCY MISC_FREQUENCY]:number
+@persist [Active GLATGMOverride GunRange]:number [Lookup]:vector2
+@persist [MISSILEKEY]:string
+@trigger [MSGBUS]
+@model models/props_lab/reciever01d.mdl
+#[
+E2 By:
+    Renco - Almost everything
+    Red - Ballistics table generator, table interpolator, MSGBUS
+
+!!!!!
+REALLY DO-NOT RE-DISTRIBUTE!
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+This E2 does the ballistics
+
+
+
+//////////VERSION LOG\\\\\\\\\\
+V0.0.0 (11-15-20) - Initial Development
+V0.0.1 (12-10-20) -
+    [ADDED] Ported ballistic solution reset from renFCS+ <V1.0.1>
+    [UPDATED] Elevref's position is now set to the current gun's mass centre
+    [FIXED] Fixed E2's name not updating properly when FCS is inactive
+V1.0.0 (12-26-20) -
+    [FIXED] Ported over fixes from renFCS+
+    [FIXED] Fixed FCS not computing solution
+
+
+
+//////////TO-DO\\\\\\\\\\
+Replace the elevation refrence holo with a mathmatical solution
+Simple parabolic mode
+
+/////DONE\\\\\
+
+
+
+//////////MSGBUS\\\\\\\\\\
+/////MSGBUS INPUTS\\\\\
+BALLISTIC_COMPUTER_POWER_ON [NUMBER]  - If compute ballistic solution
+BALLISTIC_COMPUTER_LEAD_ON  [NUMBER]  - If target leading is on
+BALLISTIC_COMPUTER_DRIFT_ON [NUMBER]  - If drift compensation is on
+BALLISTIC_COMPUTER_PARABOLIC_MODE [NUMBER] - If mortar mode is on
+MAIN_GUN_SELECTED           [ENTITY]  - Currently selected gun for ballistics
+AIMPOS                      [VECTOR3] - Target position
+TARGET_SPEED                [VECTOR3] - Target velocity for leading
+VELOCITY                    [VECTOR3] - Current vehicle velocity for drift
+WEAPONS_FREE                [NUMBER]  - If the weapons are free
+RANGE                       [NUMBER]  - Current range
+
+/////MSGBUS OUTPUTS\\\\\
+MAIN_GUN_SELECTED_BALLISTIC_SOLUTION [VECTOR3] - Ballistic Solution to add to aimpos
+MAIN_GUN_SELECTED_FLIGHT_TIME        [NUMBER]  - Flight Time of the shell in seconds
+BALLISTIC_COMPUTER_TABLE             [TABLE]   - Range table of selected ammunition
+]#
+
+
+#//////////INITIALIZATION\\\\\\\\\\#
+#Reset the E2 if we have been duped or the dupe has finished spawning
+if(duped()|dupefinished()) {reset()}
+
+#Decent ballistics
+if(first())
+{
+    #/////SETTINGS\\\\\#
+    local Index = 0 #Default: 0
+
+    MISSILEKEY = "RW61" #Default: RS82
+
+
+
+    #/////LIBRARIES\\\\\#
+    #include "renFCSLib"
+
+
+
+    #/////INITIALIZE VARIABLES\\\\\#
+    #//FREQUENCIES\\#
+    IDLE_FREQUENCY = 1000
+    ACTIVE_FREQUENCY = 150
+    MISC_FREQUENCY = 1500
+
+    #//ROCKET TABLES\\#
+    MISSILETABLES = table()
+    MISSILETABLES["S24",array] = array(vec2(-3.5,0.4),vec2(-3.3,0.6),vec2(-3.1,0.8),vec2(-3,1),vec2(-3,1.1),vec2(-2.9,1.3),vec2(-2.8,1.4),vec2(-2.8,1.5),vec2(-2.8,1.7),vec2(-2.7,1.8),vec2(-2.7,1.9),vec2(-2.7,2.1),vec2(-2.7,2.2),vec2(-2.6,2.3),vec2(-2.6,2.5),vec2(-2.6,2.6),vec2(-2.7,2.8),vec2(-2.7,2.9),vec2(-2.8,3),vec2(-2.8,3.2),vec2(-2.9,3.3),vec2(-3,3.5),vec2(-3.1,3.7),vec2(-3.2,3.8),vec2(-3.3,4),vec2(-3.4,4.1),vec2(-3.5,4.3),vec2(-3.6,4.5),vec2(-3.7,4.7),vec2(-3.8,4.8),vec2(-3.9,5),vec2(-4,5.2),vec2(-4.1,5.4),vec2(-4.2,5.6),vec2(-4.3,5.8),vec2(-4.4,6),vec2(-4.5,6.2),vec2(-4.6,6.4),vec2(-4.7,6.6),vec2(-4.8,6.9),vec2(-4.9,7.1),vec2(-5,7.3),vec2(-5.1,7.6),vec2(-5.2,7.8),vec2(-5.3,8),vec2(-5.4,8.3),vec2(-5.5,8.5),vec2(-5.6,8.8))
+    MISSILETABLES["HVAR",array] = array(vec2(-1.8,0.3),vec2(-1.8,0.4),vec2(-1.7,0.5),vec2(-1.7,0.7),vec2(-1.7,0.8),vec2(-1.7,0.9),vec2(-1.7,1),vec2(-1.8,1.2),vec2(-1.9,1.3),vec2(-2,1.4),vec2(-2.2,1.6),vec2(-2.4,1.7),vec2(-2.6,1.9),vec2(-2.8,2),vec2(-3.1,2.2),vec2(-3.3,2.3),vec2(-3.6,2.5),vec2(-3.8,2.7),vec2(-4.1,2.9),vec2(-4.4,3.1),vec2(-4.7,3.3),vec2(-5.1,3.5),vec2(-5.4,3.7),vec2(-5.8,4),vec2(-6.2,4.2),vec2(-6.5,4.5),vec2(-7,4.7),vec2(-7.4,5),vec2(-7.9,5.3),vec2(-8.4,5.6),vec2(-8.9,5.9),vec2(-9.5,6.2),vec2(-10.1,6.5),vec2(-10.8,6.9),vec2(-11.5,7.2),vec2(-12.3,7.6),vec2(-13.1,8),vec2(-14,8.3),vec2(-14.9,8.7),vec2(-15.9,9.2),vec2(-16.9,9.6),vec2(-18,10),vec2(-19.1,10.5))
+    MISSILETABLES["RS82",array] = array(vec2(-2.4,0.4),vec2(-2.8,0.6),vec2(-3.2,0.7),vec2(-3.7,0.9),vec2(-4.2,1.1),vec2(-4.8,1.3),vec2(-5.5,1.5),vec2(-6.3,1.7),vec2(-7,1.9),vec2(-7.9,2.1),vec2(-8.7,2.4),vec2(-9.6,2.6),vec2(-10.6,2.9),vec2(-11.6,3.1),vec2(-12.7,3.4),vec2(-13.8,3.7),vec2(-15,4),vec2(-16.3,4.3),vec2(-17.6,4.6),vec2(-19.1,5),vec2(-20.5,5.4),vec2(-22.1,5.8),vec2(-23.8,6.2),vec2(-25.5,6.6),vec2(-27.4,7.1),vec2(-29.3,7.6),vec2(-31.4,8.1))
+    MISSILETABLES["ZUNI",array] = array(vec2(-1.6,0.3),vec2(-1.6,0.4),vec2(-1.6,0.5),vec2(-1.6,0.5),vec2(-1.6,0.6),vec2(-1.6,0.6),vec2(-1.7,0.7),vec2(-1.7,0.8),vec2(-1.8,0.8),vec2(-1.8,0.9),vec2(-1.9,0.9),vec2(-2,1),vec2(-2.1,1.1),vec2(-2.1,1.1),vec2(-2.2,1.2),vec2(-2.3,1.3),vec2(-2.3,1.3),vec2(-2.4,1.4),vec2(-2.5,1.5),vec2(-2.6,1.5),vec2(-2.7,1.6),vec2(-2.7,1.6),vec2(-2.8,1.7),vec2(-2.9,1.8),vec2(-3,1.8),vec2(-3.1,1.9),vec2(-3.1,2),vec2(-3.2,2),vec2(-3.3,2.1),vec2(-3.4,2.1),vec2(-3.5,2.2),vec2(-3.6,2.3),vec2(-3.6,2.3),vec2(-3.7,2.4),vec2(-3.8,2.5),vec2(-3.9,2.5),vec2(-4,2.6),vec2(-4.1,2.7),vec2(-4.2,2.7),vec2(-4.2,2.8),vec2(-4.3,2.9),vec2(-4.4,2.9),vec2(-4.5,3),vec2(-4.6,3.1),vec2(-4.7,3.1),vec2(-4.8,3.2),vec2(-4.8,3.3),vec2(-4.9,3.3))
+    MISSILETABLES["70MMFFAR",array] = array(vec2(-2,0.4),vec2(-2.1,0.5),vec2(-2.1,0.7),vec2(-2.2,0.9),vec2(-2.2,1),vec2(-2.3,1.2),vec2(-2.4,1.3),vec2(-2.5,1.5),vec2(-2.6,1.6),vec2(-2.7,1.8),vec2(-2.8,1.9),vec2(-3,2.1),vec2(-3.2,2.2),vec2(-3.4,2.4),vec2(-3.7,2.5),vec2(-4.1,2.7),vec2(-4.4,2.9),vec2(-4.8,3.1),vec2(-5.1,3.2),vec2(-5.5,3.4),vec2(-6,3.6),vec2(-6.5,3.8),vec2(-6.9,4),vec2(-7.5,4.2),vec2(-8,4.4),vec2(-8.5,4.6),vec2(-9.1,4.8),vec2(-9.7,5),vec2(-10.3,5.2),vec2(-10.9,5.4),vec2(-11.6,5.6),vec2(-12.3,5.9),vec2(-13,6.1),vec2(-13.7,6.3),vec2(-14.4,6.6),vec2(-15.2,6.8),vec2(-16,7.1),vec2(-16.8,7.4),vec2(-17.6,7.6),vec2(-18.4,7.9),vec2(-19.3,8.2),vec2(-20.2,8.5),vec2(-21.1,8.8))
+    MISSILETABLES["40MMFFAR",array] = array(vec2(-3.2,0.4),vec2(-3.3,0.6),vec2(-3.4,0.8),vec2(-3.5,1),vec2(-3.7,1.2),vec2(-3.9,1.4),vec2(-4.2,1.6),vec2(-4.6,1.8),vec2(-5.1,2),vec2(-5.6,2.2),vec2(-6.2,2.4),vec2(-6.8,2.6),vec2(-7.5,2.8),vec2(-8.2,3),vec2(-9,3.2),vec2(-9.7,3.5),vec2(-10.5,3.7),vec2(-11.4,3.9),vec2(-12.2,4.2),vec2(-13.1,4.4),vec2(-14,4.6),vec2(-15,4.9),vec2(-15.9,5.2),vec2(-16.9,5.4),vec2(-17.9,5.7),vec2(-18.9,6),vec2(-20,6.3),vec2(-21.1,6.6),vec2(-22.2,6.9),vec2(-23.3,7.2),vec2(-24.5,7.5),vec2(-25.7,7.8),vec2(-26.9,8.2),vec2(-28.1,8.5),vec2(-29.3,8.9),vec2(-30.6,9.3))
+    MISSILETABLES["ATAKA",array] = array(vec2(-0.8,0.3),vec2(-0.8,0.4),vec2(-0.9,0.6),vec2(-0.9,0.8),vec2(-0.9,1),vec2(-0.9,1.2),vec2(-0.9,1.3),vec2(-0.9,1.5),vec2(-0.9,1.7),vec2(-0.9,1.9),vec2(-0.9,2.1),vec2(-0.9,2.2),vec2(-0.9,2.4),vec2(-0.9,2.6),vec2(-0.9,2.8),vec2(-0.9,2.9),vec2(-0.9,3.1),vec2(-0.9,3.3),vec2(-0.9,3.5),vec2(-0.9,3.6),vec2(-0.9,3.8),vec2(-0.9,4),vec2(-0.9,4.2),vec2(-0.9,4.3),vec2(-0.9,4.5),vec2(-0.9,4.7),vec2(-0.9,4.9),vec2(-1,5.1),vec2(-1,5.2),vec2(-1,5.4),vec2(-1,5.6),vec2(-1,5.8),vec2(-1.1,6),vec2(-1.1,6.2),vec2(-1.2,6.4),vec2(-1.2,6.7),vec2(-1.3,6.9),vec2(-1.4,7.2),vec2(-1.4,7.5),vec2(-1.5,7.8),vec2(-1.6,8.2),vec2(-1.7,8.5),vec2(-1.8,8.9),vec2(-1.9,9.3),vec2(-2.1,9.7),vec2(-2.2,10.1),vec2(-2.4,10.6),vec2(-2.6,11),vec2(-2.8,11.5))
+    MISSILETABLES["AT3",array] = array(vec2(-4.6,0.7),vec2(-5,1.2),vec2(-5.9,1.7),vec2(-7.2,2.1),vec2(-8.6,2.6),vec2(-10.1,3),vec2(-11.6,3.5),vec2(-13.2,4),vec2(-14.8,4.5),vec2(-16.5,5),vec2(-18.2,5.5),vec2(-19.9,6.1),vec2(-21.6,6.6),vec2(-23.4,7.2),vec2(-25.2,7.8),vec2(-27.1,8.5),vec2(-29.2,9.2),vec2(-24.9,7.9))
+    MISSILETABLES["AGM114",array] = array(vec2(-1.5,0.3),vec2(-1.3,0.5),vec2(-1.2,0.7),vec2(-1.1,0.9),vec2(-1.1,1),vec2(-1.1,1.2),vec2(-1.1,1.4),vec2(-1.1,1.5),vec2(-1.1,1.7),vec2(-1.1,1.9),vec2(-1,2),vec2(-1,2.2),vec2(-1,2.4),vec2(-1,2.5),vec2(-1,2.7),vec2(-1,2.9),vec2(-1,3.1),vec2(-1,3.2),vec2(-1,3.4),vec2(-1,3.6),vec2(-1,3.8),vec2(-1,3.9),vec2(-1,4.1),vec2(-1.1,4.3),vec2(-1.1,4.4),vec2(-1.1,4.6),vec2(-1.1,4.8),vec2(-1.1,5.1),vec2(-1.1,5.3),vec2(-1.2,5.5),vec2(-1.2,5.8),vec2(-1.2,6.1),vec2(-1.3,6.3),vec2(-1.3,6.6),vec2(-1.3,7),vec2(-1.4,7.3),vec2(-1.4,7.7),vec2(-1.5,8.1),vec2(-1.5,8.5),vec2(-1.6,8.9),vec2(-1.6,9.4),vec2(-1.7,9.9),vec2(-1.8,10.4),vec2(-1.9,10.9),vec2(-2,11.5),vec2(-2.1,12.1),vec2(-2.2,12.7),vec2(-2.3,13.3),vec2(-2.5,14))
+    MISSILETABLES["AT2",array] = array(vec2(-6.8,0.7),vec2(-6.5,1.1),vec2(-6.6,1.3),vec2(-6.8,1.6),vec2(-7,1.9),vec2(-7.2,2.1),vec2(-7.3,2.3),vec2(-7.5,2.6),vec2(-7.7,2.8),vec2(-7.8,3),vec2(-8,3.2),vec2(-8.1,3.5),vec2(-8.3,3.7),vec2(-8.4,3.9),vec2(-8.5,4.1),vec2(-8.7,4.4),vec2(-8.8,4.6),vec2(-8.9,4.8),vec2(-9,5),vec2(-9.2,5.3),vec2(-9.3,5.5),vec2(-9.4,5.7),vec2(-9.5,5.9),vec2(-9.6,6.2),vec2(-9.7,6.4),vec2(-9.8,6.6),vec2(-9.9,6.8),vec2(-10,7.1),vec2(-10.2,7.3),vec2(-10.3,7.5),vec2(-7.7,5.2),vec2(-7.8,5.3),vec2(-7.9,5.6),vec2(-8,5.8),vec2(-8.1,6),vec2(-8.2,6.2),vec2(-8.3,6.5),vec2(-8.4,6.7),vec2(-8.5,6.9),vec2(-8.6,7.1),vec2(-8.7,7.3),vec2(-8.8,7.6),vec2(-2.8,3.4))
+    MISSILETABLES["AGM45",array] = array(vec2(-2.9,1.1),vec2(-2.4,1.5),vec2(-2.2,1.9),vec2(-2.1,2.2),vec2(-2.1,2.4),vec2(-2.1,2.7),vec2(-2,2.9),vec2(-2,3.1),vec2(-2,3.3),vec2(-2,3.5),vec2(-2,3.6),vec2(-2,3.8),vec2(-2,4),vec2(-2,4.1),vec2(-2,4.3),vec2(-2,4.4),vec2(-2,4.5),vec2(-2,4.7),vec2(-2,4.8),vec2(-2,4.9),vec2(-2,5),vec2(-2,5.2),vec2(-2,5.3),vec2(-2,5.4),vec2(-2,5.5),vec2(-2,5.6),vec2(-2,5.7),vec2(-2,5.8),vec2(-2,5.9),vec2(-1.9,6),vec2(-1.9,6.1),vec2(-1.9,6.2),vec2(-1.9,6.3),vec2(-1.9,6.4),vec2(-1.9,6.5),vec2(-1.9,6.6),vec2(-1.9,6.7),vec2(-1.9,6.8),vec2(-1.9,6.9),vec2(-1.9,7),vec2(-1.9,7.1),vec2(-1.9,7.2),vec2(-1.9,7.2),vec2(-1.9,7.3),vec2(-1.9,7.4),vec2(-1.9,7.5),vec2(-1.9,7.6),vec2(-1.9,7.7),vec2(-1.9,7.7))
+    MISSILETABLES["AGM122",array] = array(vec2(-5.1,0.6),vec2(-4.6,0.8),vec2(-4.2,1),vec2(-4,1.2),vec2(-3.8,1.3),vec2(-3.7,1.5),vec2(-3.6,1.6),vec2(-3.5,1.7),vec2(-3.5,1.8),vec2(-3.4,1.9),vec2(-3.4,2),vec2(-3.4,2.2),vec2(-3.4,2.3),vec2(-3.5,2.4),vec2(-3.5,2.5),vec2(-3.5,2.7),vec2(-3.6,2.8),vec2(-3.6,2.9),vec2(-3.7,3.1),vec2(-3.7,3.2),vec2(-3.8,3.3),vec2(-3.8,3.5),vec2(-3.9,3.6),vec2(-3.9,3.8),vec2(-4,3.9),vec2(-4.1,4.1),vec2(-4.2,4.3),vec2(-4.2,4.4),vec2(-4.3,4.6),vec2(-4.4,4.8),vec2(-4.5,4.9),vec2(-4.6,5.1),vec2(-4.7,5.3),vec2(-4.8,5.5),vec2(-4.8,5.7),vec2(-4.9,5.8),vec2(-5.1,6),vec2(-5.2,6.2),vec2(-5.3,6.4),vec2(-5.4,6.6),vec2(-5.5,6.8),vec2(-5.6,7),vec2(-5.8,7.3),vec2(-5.9,7.5),vec2(-6,7.7),vec2(-6.2,7.9),vec2(-6.3,8.1),vec2(-6.5,8.4),vec2(-6.6,8.6))
+    MISSILETABLES["BGM71",array] = array(vec2(-2.2,0.5),vec2(-2,0.8),vec2(-2,1.1),vec2(-2,1.5),vec2(-2.1,1.8),vec2(-2.2,2.1),vec2(-2.3,2.4),vec2(-2.4,2.7),vec2(-2.5,3.1),vec2(-2.6,3.4),vec2(-2.8,3.7),vec2(-2.9,4.1),vec2(-3.1,4.4),vec2(-3.3,4.7),vec2(-3.5,5),vec2(-3.8,5.4),vec2(-4.1,5.8),vec2(-4.5,6.2),vec2(-4.9,6.7),vec2(-5.5,7.2),vec2(-6.1,7.8),vec2(-7,8.3),vec2(-7.9,9),vec2(-9,9.6),vec2(-10.3,10.3),vec2(-11.8,10.9),vec2(-13.3,11.6),vec2(-15,12.3),vec2(-16.8,13.1),vec2(-18.6,13.8))
+    MISSILETABLES["RW61",array] = array(vec2(-42.3,0.4),vec2(-87,0.5),vec2(-135,0.7),vec2(-179.7,0.8),vec2(-222.7,0.9),vec2(-270.3,1),vec2(-313,1),vec2(-359.3,1.1),vec2(-409,1.2),vec2(-465,1.3),vec2(-528,1.3),vec2(-587.3,1.4),vec2(-650,1.5),vec2(-719.7,1.6),vec2(-788.3,1.7),vec2(-860,1.7),vec2(-944.7,1.8),vec2(-1028.3,1.9),vec2(-1109,2),vec2(-1193.7,2),vec2(-1280.3,2.1),vec2(-1370.7,2.2),vec2(-1470,2.3),vec2(-1579,2.4),vec2(-1678,2.4),vec2(-1780.3,2.5),vec2(-1892.3,2.6),vec2(-2000,2.7),vec2(-2111,2.7),vec2(-2240,2.8),vec2(-2364.7,2.9),vec2(-2484.7,3),vec2(-2607.3,3.1),vec2(-2732.7,3.1),vec2(-2860.7,3.2),vec2(-3000.3,3.3),vec2(-3151.7,3.4),vec2(-3288.3,3.4),vec2(-3428,3.5),vec2(-3579.7,3.6),vec2(-3724.7,3.7),vec2(-3871.7,3.7),vec2(-4042.3,3.8),vec2(-4206,3.9),vec2(-2872,2.6))
+
+
+    #//MISC\\#
+    STATUSES[0,string] = "IDLE" STATUSES[1,string] = "ACTIVE"
+
+
+
+    #/////HOLOGRAMS\\\\\#
+    holoCreate(Index,vec(0),vec(0),ang(0),vec4(0),"plane")
+    holoParent(Index,entity())
+    #ifdef entity:propDraw(number)
+        holoEntity(Index):propDraw(0)
+    #endif
+    ELEVREFI = Index
+    ELEVREFE = holoEntity(Index)
+    Index++
+
+    Index = Index:renFCSLCreateDisplay()
+
+    TABLEREFI = Index
+
+
+
+    #/////FUNCTIONS\\\\\#
+    #//MSGBUS\\#
+    #Get the things from the bus thing
+    function void msgBusIn()
+    {
+        if(->MSGBUS)
+        {
+            Power_On       = MSGBUS["BALLISTIC_COMPUTER_POWER_ON",number]
+            Lead_On        = MSGBUS["BALLISTIC_COMPUTER_LEAD_ON",number]
+            Drift_On       = MSGBUS["BALLISTIC_COMPUTER_DRIFT_ON",number]
+            Parabolic_Mode = MSGBUS["BALLISTIC_COMPUTER_PARABOLIC_MODE",number]
+            Current_Gun    = MSGBUS["MAIN_GUN_SELECTED",entity]
+            Target_Pos     = MSGBUS["AIMPOS",vector]
+            Target_Vel     = MSGBUS["TARGET_SPEED",vector]
+            Current_Vel    = MSGBUS["VELOCITY",vector]
+            Weapons_Free   = MSGBUS["WEAPONS_FREE",number]
+            Range          = MSGBUS["RANGE",number]
+        }
+    }
+
+    #We don't want the things anymore
+    function void msgBusOut()
+    {
+        if(->MSGBUS)
+        {
+            MSGBUS["MAIN_GUN_SELECTED_BALLISTIC_SOLUTION",vector] = Solution
+            MSGBUS["MAIN_GUN_SELECTED_FLIGHT_TIME",number]        = Flight_Time
+            #MSGBUS["BALLISTIC_COMPUTER_TABLE",table]             = Current_Table
+        }
+    }
+
+
+
+    #/////FINALIZE\\\\\#
+    #//MISC\\#
+    runOnLast(1)
+
+    #//VERSION\\#
+    VERSION = "V1.0.0"
+    setName("renFCS "+VERSION)
+    timer("ballistics_update",IDLE_FREQUENCY)
+
+
+    #//FINALIZE MSGBUS\\#
+    #Push the name of the E2 to the bus
+    MSGBUS["NODE_NAMES",array]:pushString(entity():getName())
+
+    #Grab and push things to the bus
+    msgBusIn()
+    msgBusOut()
+}
+
+
+
+#Update MSGBUS
+elseif(inputClk())
+{
+    msgBusIn()
+
+    #Determine if we're going to run or not
+    if(changed(Power_On)|changed(Weapons_Free))
+    {
+        Active = (Power_On & Weapons_Free)
+    
+        setName("renFCS "+VERSION+"\n"+
+        STATUSES[Active,string]+": "+(Active ? ACTIVE_FREQUENCY : IDLE_FREQUENCY)+"ms")
+    
+        if(Active) {timer("misc_update",100)}
+    }
+
+    #Update precached stuff on gun/ammunition change
+    if(changed(Current_Gun)|changed(Current_Gun:acfMuzzleVel()))
+    {
+        CurMuzzleVel = Current_Gun:acfMuzzleVel()
+        GLATGMOverride = (Current_Gun:acfAmmoType()=="GLATGM")
+    
+        #Move and parent the elevation reference hologram
+        holoParent(ELEVREFI,Current_Gun)
+        holoPos(ELEVREFI,Current_Gun:massCenter())
+    
+        if(CurMuzzleVel == 0)
+        {
+            Current_Table = MISSILETABLES[MISSILEKEY,array]
+        }
+    
+        elseif(!GLATGMOverride)
+        {
+            Current_Table = renFCSLTableCreate(Current_Gun,TABLEREFI)
+        }
+    }
+}
+
+
+
+#Main ballistics loop
+elseif(clk("ballistics_update"))
+{
+    timer("ballistics_update",Active ? ACTIVE_FREQUENCY : IDLE_FREQUENCY)
+
+    #GLATGM Mode
+    if(GLATGMOverride)
+    {
+        Solution = vec(0)
+    }
+
+    #Parabolic mode
+    elseif(Parabolic_Mode)
+    {
+        Solution = vec(0)
+    }
+
+    #Regular range table lookup
+    else
+    {
+        holoAng(ELEVREFI,ang(0,Current_Gun:angles():yaw(),0))
+
+        GunRange = ((Current_Gun:massCenter() - Target_Pos):setZ(0):length())/RenFCSL_CONVERT
+        local AdjustedRange = GunRange-abs(ELEVREFE:elevation(Target_Pos)/RenFCSL_CONVERT)
+
+        Lookup = renFCSLTableInterpolate(Current_Table,AdjustedRange)
+
+        Flight_Time = Lookup[2]
+
+        local GunDrift = (Current_Vel * Flight_Time)
+        local LeadDrift = (Target_Vel * Flight_Time)
+        local Opposite = renFCSLFindOpposite(AdjustedRange,Lookup[1])
+
+        Solution = vec(0,0,Opposite) - (GunDrift-LeadDrift)
+    }
+
+    msgBusOut()
+}
+
+
+
+#Main display loop
+elseif(clk("misc_update"))
+{
+    if(Active) {timer("misc_update",MISC_FREQUENCY)}
+
+    renFCSLUpdateDisplay(Range,Active)
+}
+
+
+
+#Update the MSGBUS with blank data upon E2 destruction (Hopefully)
+elseif(last())
+{
+    Solution = vec(0)
+    Flight_Time = 0
+
+    msgBusOut()
+}

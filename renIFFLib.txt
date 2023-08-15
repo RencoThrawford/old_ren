@@ -1,0 +1,188 @@
+@name renIFFLib
+@persist [RenIFFL_StartTime]:number [RenIFFL_StartPos]:vector
+@persist [RenIFFLDEBUG RenIFFLTHRESHOLD RenIFFLTIMEOUT]:number [RenIFFLTOKEN RenIFFLVERSION]:string
+#[
+E2 Library By:
+    Renco - Everything
+    Fizzles - Alpha Tester
+
+!!!!!
+RE-DISTRIBUTE I GUESS
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+An extremely simple library to help reduce- or encourage freindly fire
+Mostly intended for use with the rau system so AI vehicles/emplacements wont shoot at absolutely everything
+
+
+
+//////////VERSION LOG\\\\\\\\\
+V0.0.0 (10-25-20) - Initial Devloplment
+V1.0.0 (10-25-20) - Functionally Complete
+V1.0.1 (12-10-20) -
+    [UPDATED] Updated renIFFLStart() array generation
+    [UPDATED] Updated renIFFLRecieve() array generation
+V1.0.2 (12-13-20)
+    [FIXED] Numerous undocumented fixes with Fizzle's help
+V1.0.3 (01-03-20)
+    [FIXED] More undocumented fixes
+V1.0.4 (01-05-20)
+    [FIXED] Even more undocumented fixes
+
+
+
+//////////NOTES\\\\\\\\\\
+
+
+
+//////////TO-DO\\\\\\\\\\
+Check if we can convert the StartPos into an integer directly
+
+/////DONE\\\\\#
+]#
+
+
+#//////////VARIABLES\\\\\\\\\\#
+RenIFFLDEBUG     = 1          #Default: 0; Enables debug mode
+RenIFFLTHRESHOLD = 10         #Default: 10; In meters
+RenIFFLTIMEOUT   = 1000       #Default: 1000; Milliseconds?
+RenIFFLTOKEN     = "-s rIFFL" #Default: "-s rIFFL"; -s tells SCRL this is a silent message
+RenIFFLVERSION   = "V1.0.4"
+
+
+
+#//////////FUNCTIONS\\\\\\\\\\#
+#[This function checks if we're in debug mode, and prints to the console with a formatted string
+Inputs:
+    Message [STRING] - The message we want in the console
+]#
+function void renIFFLDebug(Message:string)
+{
+    if(RenIFFLDEBUG) {print(_HUD_PRINTCONSOLE,""+entity():id()+": renIFFL - " + Message)}
+}
+
+
+#[Sets some internal variables, and converts the Data and Position inputs for use with rIFFLe
+Inputs:
+    Data [STRING] - The thing you want to send along, can be anything, operator name, chip entity ID, or even nothing
+    Position [VECTOR3] - Position you wish to interrogate at
+    Curtime [NUMBER] - Curtime, used for timing out (Probably a pointless feature)
+Output:
+    [ARRAY]
+        [1,string]
+            Data input with token "rIFFL" added
+        [2,vector]
+            Position input integerized
+]#
+function array renIFFLStart(Data:string,Position:vector,Curtime:number)
+{
+    #SCRL converts the position to integers
+    RenIFFL_StartPos = vec(int(Position[1]),int(Position[2]),int(Position[3]))
+    RenIFFL_StartTime = Curtime
+
+    local Return = array(RenIFFLTOKEN+";"+Data,RenIFFL_StartPos)
+
+    renIFFLDebug("Sent; "+Return[1,string]+", "+Return[2,vector]+" @ "+RenIFFL_StartTime)
+
+    return Return
+}
+
+#[
+Inputs:
+    SCRLDATA [ARRAY]   - Data from recieving SCRL
+    OurData  [STRING]  - Thing we will send along, just like starting the rIFFLe
+    CurPos   [VECTOR3] - Our current position
+    Curtime  [NUMBER]  - Curtime, used for timing out
+Output:
+    [ARRAY] Count == 0; Invalid rIFFLe token, Count == 1; Valid reply, Count == 3; Replying
+        [1,string]
+            If we've started rIFFLe, and we recieve a valid reply, will return the data the interrogated target sent us
+            If we're replying, will reutrn the formatted data string to send over SCRL
+        [2,vector]
+            Returns the position sent to us when we are replying, send this over SCRL
+        [3,string]
+            Returns the data of whoever started the rIFFLe, do with this what you will
+]#
+function array renIFFLRecieve(SCRLDATA:array,OurData:string,CurPos:vector,Curtime:number)
+{
+    #Extract the data and position from the SCRLDATA array
+    local Data = SCRLDATA[3,string]
+    local Position = SCRLDATA[2,vector]
+
+    #Explode the data into the token and the extra data
+    local ExpData = Data:explode(";")
+    local Token = ExpData[1,string]:trim()
+    local ExtData = ExpData[2,string]
+
+    local Return = array()
+
+    renIFFLDebug("Recieved; "+Data+", "+Position)
+
+    #Checking if we're looking at a valid rIFFLe message
+    if(Token == RenIFFLTOKEN)
+    {
+        #Checking if we're the sender
+        if(Position == RenIFFL_StartPos)
+        {
+            local Elapsed = Curtime-RenIFFL_StartTime
+
+            #If the request is still valid, return the replier's data and reset the internal variables
+            if(Elapsed < RenIFFLTIMEOUT)
+            {
+                Return = array(ExtData)
+
+                RenIFFL_StartPos = vec(0)
+                RenIFFL_StartTime = 0
+
+                renIFFLDebug("Valid response @ "+Curtime+", Took: "+Elapsed)
+            }
+
+            #Else we just reset
+            else
+            {
+                RenIFFL_StartPos = vec(0)
+                RenIFFL_StartTime = 0
+
+                renIFFLDebug("Reply took too long @ "+Curtime+", Took: "+Elapsed)
+            }
+        }
+
+        #We're not the sender
+        else
+        {
+            #Getting the distances between us and the position sent
+            local Distance = (((CurPos - Position):setZ(0):length())/39.37)
+
+            #Check if we're the ones being interrogated
+            if(Distance < RenIFFLTHRESHOLD)
+            {
+                #Check to see if someone is trying to start a loop
+                if(Data != OurData)
+                {
+                    OurData = RenIFFLTOKEN+";"+OurData
+
+                    Return = array(OurData:trim(),Position,Data)
+
+                    renIFFLDebug("Replying with: "+OurData+", @ "+Curtime)
+                }
+                else
+                {
+                    renIFFLDebug("Breaking loop!")
+                }
+            }
+            else
+            {
+                renIFFLDebug("Not us")
+            }
+        }
+    }
+
+    else
+    {
+        renIFFLDebug("Invalid rIFFL Token")
+    }
+
+    return Return
+}

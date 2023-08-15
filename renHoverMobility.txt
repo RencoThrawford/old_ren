@@ -1,0 +1,368 @@
+@name renHoverMobility
+@inputs [MSGBUS]:table [DriverSeat]:entity [DriverPrevWeapon DriverNextWeapon]:number [DriverCam]:wirelink
+@inputs [ArmFL ArmFR ArmRL ArmRR]:entity
+@inputs [EngineHitbox]:entity [ArmFLHitbox ArmFRHitbox ArmRLHitbox ArmRRHitbox]:entity
+@persist [HOVER_ALT MAX_ARM_ANGLE ARM_RATE MAX_VEL MAX_YAW_VEL]:number [HORNSOUND START_UP_SOUND SHUT_DOWN_SOUND]:string [PID_SETTINGS FORWARD_PID_SETTINGS YAW_PID_SETTINGS]:vector
+@persist [HOVER_FREQUENCY ARM_FREQUENCY OPERATOR_QUERY_FREQUENCY]:number
+@persist [Aimpos Velocity]:vector [Angle]:angle [Gunner]:entity [Self]:array
+@persist [Speed_Ratio Steering_Input]:number [Operator]:entity
+@persist [BASE]:entity [ACTIVATIONS ARMS ARMINDEXES]:array [RANGERS]:table
+@outputs [Zoom Saftey Started MouseSteer DriftAssist WS AD Ready DriverCamActive Forwards_Input]:number [ArmSmoother]:vector2 [BaseAngVel]:angle [BaseVel]:vector [Dists YawPID ForwardPID]:array [PIDS]:table
+@trigger [MSGBUS] [DriverPrevWeapon DriverNextWeapon]
+runOnKeys(Operator,1)
+#[
+E2 By:
+    Renco - Practically Everything
+    Red - MSGBUS
+
+!!!!!
+DO-NOT RE-DISTRIBUTE!
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+This illegal E2 does hover movement, based on four hover arms
+Hover arms can be shot off, loosing thrust to that arm, optionally has a weakness entity input to greatly reduce thrust when shot off/damaged
+
+
+
+//////////VERSION LOG\\\\\\\\\\
+V0.0.0 (10-20-20) - Initial Development
+V0.0.1 (01-08-21)
+    [ADDED] Added basic hovermovement
+V0.0.2 (01-09-21)
+    [ADDED] Added ignition, horn, and view switching keys
+    [ADDED] Added ignition, parenting, and thruster sounds
+    [ADDED] Added parenting finish notification
+    [ADDED] Added driver camera
+    [ADDED] Added apply force drift assist
+    [ADDED] Added drift assist toggle
+    [FIXED] Fixed arms not parenting when a driver instead of a gunner is present
+    [FIXED] Fixed issue with not being able to steer while accelerating/decellerating
+    [REMOVED] Removed drift assist via rolling
+V0.0.3 (01-12-21)
+    [ADDED] Added debug mode to allow you to change the PIDs on the fly use (t (Thrust) y (Yaw) f (Forward) <P> <I> <D>)
+
+
+
+//////////TO-DO\\\\\\\\\\
+
+/////DONE\\\\\
+
+
+
+//////////MSGBUS\\\\\\\\\\
+/////MSGBUS INPUTS\\\\\
+AIMPOS   [VECTOR3] - Aimpos for steering
+GUNNER   [ENTITY]  - The gunner who will take control if there is no driver
+VELOCITY [VECTOR3] - Current speed of the vehicle
+ANGLE    [ANGLE]   - Current angle of the vehicle
+SELF     [ARRAY]   - Array of everything connected
+
+////MSGBUS OUTPUTS\\\\\
+SPD_RATIO      [NUMBER] - Ratio of speed to maximum speed
+DRIVER         [ENTITY] - Driver of current vehicle
+STEERING_INPUT [NUMBER] - -1/1 of steering wheel position
+]#
+
+
+#//////////INITIALIZATION\\\\\\\\\#
+#Reset the E2 if we have been duped or the dupe has finished spawning
+if (duped()|dupefinished()) {reset()}
+
+#First
+if(first())
+{
+    #/////SETTINGS\\\\\#
+    local Index = 0
+    local DEBUG = 0
+    HOVER_ALT = 50
+    PID_SETTINGS = vec(1,0.005,0.7)
+    FORWARD_PID_SETTINGS = vec(0.08,0.005,0.01)
+    YAW_PID_SETTINGS = vec(0.1,0.05,0.015)
+    MAX_ARM_ANGLE = 24
+    ARM_RATE = 10
+    MAX_VEL = 500
+    MAX_YAW_VEL = 50
+    HORNSOUND = "acf_extra/vehiclefx/horn/horn10.wav"
+    START_UP_SOUND = "acf_extra/vehiclefx/starters/s_mammothtank_start.wav"
+    local THRUSTER_SOUND = "acf_extra/airfx/mig29.wav"
+    SHUT_DOWN_SOUND = "acf_extra/vehiclefx/engines/gnomefather/gt101down.wav"
+    local DRIVERCAMPOS = vec(0,0,100)
+    DriverCamActive = 1
+    DriftAssist = 1
+
+
+
+    #/////LIBRARIES\\\\\#
+    #include "renKeyLib"
+    #include "renHoverMobilityLib"
+
+    ACTIVATIONS[0,string] = "off"
+    ACTIVATIONS[1,string] = "on"
+    HOVER_FREQUENCY = 50
+    ARM_FREQUENCY = 75
+    OPERATOR_QUERY_FREQUENCY = 1000
+    ARMS = array(ArmFL,ArmFR,ArmRL,ArmRR)
+
+    Zoom = 100
+
+
+
+    #/////FUNCTIONS\\\\\#
+    #//MSGBUS\\#
+    #Grabs things from the bus
+    function void msgBusIn()
+    {
+        if(->MSGBUS)
+        {
+            Aimpos   = MSGBUS["AIMPOS",vector]
+            Gunner   = MSGBUS["GUNNER",entity]
+            Velocity = MSGBUS["VELOCITY",vector]
+            Angle    = MSGBUS["ANGLE",angle]
+            Self     = MSGBUS["SELF",array]
+        }
+    }
+
+    #Push things to the bus
+    function void msgBusOut()
+    {
+        if(->MSGBUS)
+        {
+            MSGBUS["SPD_RATIO",number]      = Speed_Ratio
+            MSGBUS["DRIVER",entity]         = Operator
+            MSGBUS["STEERING_INPUT",number] = Steering_Input
+        }
+    }
+
+
+    #//MISC\\#
+    #[Notifies whoever is operator
+    Inputs:
+        Message [STRING] - The message that will be sent
+    ]#
+    function void operatorNotify(Message:string)
+    {
+        Operator:vehicle():hintDriver("[renHoverMobility] "+Message,5.5)
+    }
+
+
+
+    #/////INTIIALIZE\\\\\#
+    runOnLast(1)
+
+    #//VERSION\\#
+    VERSION = "V0.0.3"
+    setName("renHoverMobility "+VERSION)
+
+
+    #//FINALIZE MSGBUS\\#
+    MSGBUS["NODE_NAMES",array]:pushString(entity():getName())
+    msgBusIn()
+    msgBusOut()
+    BASE = Self[1,entity]
+
+    rangerReset()
+    rangerPersist(1)
+    rangerHitWater(1)
+    rangerFilter(Self:add(players()))
+
+
+    timer("operator_query",OPERATOR_QUERY_FREQUENCY)
+
+    foreach(K,A:entity = ARMS)
+    {
+        holoCreate(Index,A:toWorld(vec(0)),vec(0),A:toWorld(ang(0)),vec4(0),"plane")
+        holoParent(Index,BASE)
+        ARMINDEXES:pushNumber(Index)
+        Index++
+    }
+
+    if(->DriverSeat)
+    {
+        holoCreate(Index,BASE:toWorld(DRIVERCAMPOS),vec(0),BASE:toWorld(ang(0)),vec4(0),"plane")
+        holoParent(Index,BASE)
+        DriverCam["Parent",entity] = holoEntity(Index)
+        DriverCam["FilterEntities",array] = Self
+        DriverCam["FOV",number] = Zoom
+        Index++
+    }
+    
+    if(DEBUG) {runOnChat(1) hint("[renHoverMobility] Debug mode enabled!",5.5)}
+
+    BASE:soundPlay("thruster",0,THRUSTER_SOUND)
+    soundVolume("thruster",0)
+}
+
+
+
+elseif(inputClk())
+{
+    msgBusIn()
+    
+    if(changed(DriverPrevWeapon)|changed(DriverNextWeapon))
+    {
+        local ZoomInc = (DriverNextWeapon-DriverPrevWeapon)*20
+        Zoom = clamp(Zoom+ZoomInc,10,300)
+
+        DriverCam["Distance",number] = max(clamp(Zoom,100,300)-100,0)
+        DriverCam["FOV",number] = clamp(Zoom,10,100)
+    }
+}
+
+
+
+elseif(keyClk(Operator))
+{
+    if((!Operator:isTyping())&Operator:vehicle())
+    {
+        local Key = keyClkPressed()
+        local Pressed = Operator:keyPressed(Key)
+
+        switch(Key)
+        {
+            case RenKL_KEYS["SAFTEY",string],
+                Saftey = Pressed
+            break
+
+            case RenKL_KEYS["IGNITION",string],
+                if(Saftey)
+                {
+                    Started = Pressed
+                    if(BASE:isFrozen()&Ready) {BASE:propFreeze(!Started)}
+                    
+                    if(changed(Started))
+                    {
+                        soundStop("ignition")
+                        if(Started) {timer("hover",HOVER_FREQUENCY) timer("arms",ARM_FREQUENCY) soundVolume("thruster",1,5) BASE:soundPlay("ignition",0,START_UP_SOUND)}
+                        else{stoptimer("hover") stoptimer("arms") soundVolume("thruster",0,2.5) BASE:soundPlay("ignition",0,SHUT_DOWN_SOUND)}
+                    }
+                }
+            break
+
+            case RenKL_KEYS["HORN",string],
+                if(Saftey&Pressed) {BASE:soundPlay("horn",0,HORNSOUND)} else{soundStop("horn")}
+            break
+
+            case RenKL_KEYS["TOGGLE_MOUSE",string],
+                if(Started&Pressed) {MouseSteer = !MouseSteer operatorNotify("Mouse steering "+ACTIVATIONS[MouseSteer,string]+".")}
+            break
+            
+            case RenKL_KEYS["DRIFT_ASSIST",string],
+                if(Started&Pressed) {DriftAssist = !DriftAssist operatorNotify("Drift assist "+ACTIVATIONS[DriftAssist,string]+".")}
+            break
+
+            case RenKL_KEYS["VIEW_SWITCH",string],
+                if(Pressed)
+                {
+                    if(DriverSeat:driver()==Operator) {DriverCamActive = !DriverCamActive DriverCam["Activated",number] = DriverCamActive}
+                }
+            break
+
+            default,
+                WS = Operator:keyPressed(RenKL_KEYS["FORWARD",string])-Operator:keyPressed(RenKL_KEYS["BACKWARD",string]) #Backwards or forwards?
+                if(!MouseSteer) {AD = Operator:keyPressed(RenKL_KEYS["LEFT",string])-Operator:keyPressed(RenKL_KEYS["RIGHT",string])}
+            break
+        }
+    }
+}
+
+
+
+elseif(clk("hover"))
+{
+    timer("hover",HOVER_FREQUENCY)
+    if(DriftAssist) {BASE:renHML_DriftDamping()}
+    Dists = BASE:renHML_Rangers()
+    PIDS = Dists:renHML_RangerPID(HOVER_ALT,vec2(-2,2),PID_SETTINGS,PIDS)
+    BASE:renHML_Thrust(PIDS,ARMS)
+}
+
+
+
+elseif(clk("arms"))
+{
+    timer("arms",ARM_FREQUENCY)
+    if(Ready)
+    {
+        if(MouseSteer) {local Aim = Aimpos if(DriverSeat:driver()) {Aim = DriverCam["HitPos",vector]} AD = clamp((-BASE:bearing(Aim)*1)/90,-1,1)}
+
+        BaseVel = BASE:velL()
+        BaseAngVel = BASE:angVel()
+
+        YawPID = renHML_PID(AD*MAX_YAW_VEL,BaseAngVel:yaw(),vec2(-2,2),YawPID,YAW_PID_SETTINGS)
+        ForwardPID = renHML_PID(WS*MAX_VEL,BaseVel:x(),vec2(-2,2),ForwardPID,FORWARD_PID_SETTINGS)
+
+        ArmSmoother = renHML_EvalArmAng(clamp(ForwardPID[1,number],-1,1),clamp(YawPID[1,number],-1,1),MAX_ARM_ANGLE,ARM_RATE,ArmSmoother)
+
+        foreach(K,Ind:number = ARMINDEXES) {local Rights = (((Ind%2)==0) ? 1 : 2) holoAng(Ind,BASE:toWorld(ang(ArmSmoother[Rights],0,0)))}
+
+        soundPitch("thruster",clamp(abs(BASE:vel():length()/MAX_VEL*25)+100,100,200),1.5)
+    }
+}
+
+
+
+elseif(clk("operator_query"))
+{
+    timer("operator_query",(Operator) ? (OPERATOR_QUERY_FREQUENCY) : (OPERATOR_QUERY_FREQUENCY >> 1))
+    if(DriverSeat:driver()) {Operator = DriverSeat:driver()}
+    elseif(Gunner) {Operator = Gunner}
+    else{Operator = noentity()}
+    if(changed(Operator)) {DriverCam["Activated",number] = DriverCamActive&DriverSeat:driver():isPlayer() if(Operator:isPlayer()&(!Ready)) {timer("parent",5)}}
+}
+
+
+elseif(clk("parent"))
+{
+    if(!Ready)
+    {
+        for(K=1,ARMS:count())
+        {
+            ARMS[K,entity]:parentTo(holoEntity(ARMINDEXES[K,number]))
+            ARMS[K,entity]:soundPlay(K,2,"ambient/energy/weld"+randint(2)+".wav")
+        }
+        Ready = 1
+        operatorNotify("Finished parenting arm(s)")
+    }
+}
+
+
+elseif(chatClk(owner()))
+{
+    local Said = owner():lastSaid():lower()
+    local Split = Said:explode(" ")
+    local Command = Split:string(1)
+    local P = Split:string(2):toNumber()
+    local I = Split:string(3):toNumber()
+    local D = Split:string(4):toNumber()
+    
+    switch(Command)
+    {
+        case "t",
+        case "m",
+            PID_SETTINGS = vec(P,I,D)
+            operatorNotify("Setting thrust to: "+PID_SETTINGS)
+            hideChat(1)
+        break
+        
+        case "y",
+            YAW_PID_SETTINGS = vec(P,I,D)
+            operatorNotify("Setting yaw to: "+YAW_PID_SETTINGS)
+            hideChat(1)
+        break
+        
+        case "f",
+            FORWARD_PID_SETTINGS = vec(P,I,D)
+            operatorNotify("Setting forward to: "+FORWARD_PID_SETTINGS)
+            hideChat(1)
+        break
+    }
+}
+
+
+if(last())
+{
+    if(Ready) {foreach(K,A:entity = ARMS) {A:deparent()}}
+}

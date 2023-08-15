@@ -1,0 +1,238 @@
+@name renFCSLib
+@persist [RenFCSL_DRAGDIV RenFCSL_GRAVITYRAT RenFCSL_CONVERT RenFCSL_DISPDIGIT RenFCSL_DISPBACKLIGHT]:number [RenFCSL_ORANGE RenFCSL_BLACK RenFCSL_GREY]:vector4 [RenFCSL_VERSION RenFCSL_DISPLAYMAT]:string
+@autoupdate on
+#[
+E2 Library By:
+    Renco - Not everything
+    Red - Nearly everything
+
+!!!!!
+REALLY DO-NOT RE-DISTRIBUTE!
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+A simple common library between renFCS and renFCS+ so any small changes I make to this will be reflected in either E2
+
+
+
+//////////VERSION LOG\\\\\\\\\
+V0.0.0 (11-19-20) - Initial Devlopment
+V1.0.0 (12-26-20) -
+    [FIXED] Fixed display backlight ref not updating for standard generic
+    [FIXED] Fixed middle and right digit being the same position
+    [FIXED] Fixed digit display updating the backlight instead of the digits
+
+
+
+//////////TO-DO\\\\\\\\\\
+
+/////DONE\\\\\#
+]#
+
+
+#//////////VARIABLES\\\\\\\\\#
+RenFCSL_VERSION = "V1.0.0"
+
+RenFCSL_DISPLAYMAT = "holograms/hologram"
+RenFCSL_ORANGE = vec4(255,127,0,255)
+RenFCSL_BLACK = vec4(25,25,25,255)
+RenFCSL_GREY = vec4(25,25,25,200)
+
+RenFCSL_DRAGDIV = acfDragDiv()
+RenFCSL_GRAVITYRAT = propGravity()[3]/-600
+RenFCSL_CONVERT = 39.37
+
+RenFCSL_DISPBACKLIGHT=RenFCSL_DISPDIGIT = -1
+
+
+
+#//////////FUNCTIONS\\\\\\\\\#
+#[This function creates a display on the parent E2
+Inputs:
+    [NUMBER] - The index at which the holograms will be created
+Return:
+    [NUMBER] - The last used holo + 1
+]#
+function number number:renFCSLCreateDisplay()
+{
+    local Index = This
+    local Model = entity():model()
+
+    switch(Model)
+    {
+        #Standard generic display model
+        case "models/props_lab/reciever01d.mdl",
+            #Backlight
+            holoCreate(Index,entity():toWorld(vec(5.8,-2.7,-0.42)),vec(0.21,0.41,1),entity():toWorld(ang(90,0,0)),RenFCSL_BLACK,"plane")
+            holoParent(Index,entity())
+            holoMaterial(Index,RenFCSL_DISPLAYMAT)
+            holoDisableShading(Index,0)
+            RenFCSL_DISPBACKLIGHT = Index
+            Index++
+
+            #Left Range Digit
+            holoCreate(Index,entity():toWorld(vec(5.8,-3.5,-0.5)),vec(0.15,0.02,0.15),entity():toWorld(ang(0,-90,0)),RenFCSL_GREY,"models/sprops/misc/alphanum/alphanum_0.mdl")
+            holoParent(Index,entity())
+            holoMaterial(Index,RenFCSL_DISPLAYMAT)
+            holoDisableShading(Index,1)
+            holoBodygroup(Index,0,3)
+            RenFCSL_DISPDIGIT = Index
+            Index++
+
+            #Middle Range Digit
+            holoCreate(Index,entity():toWorld(vec(5.8,-2.3,-0.5)),vec(0.15,0.02,0.15),entity():toWorld(ang(0,-90,0)),RenFCSL_GREY,"models/sprops/misc/alphanum/alphanum_0.mdl")
+            holoParent(Index,entity())
+            holoMaterial(Index,RenFCSL_DISPLAYMAT)
+            holoDisableShading(Index,1)
+            holoBodygroup(Index,0,3)
+            Index++
+
+            #Right Range Digit
+            holoCreate(Index,entity():toWorld(vec(5.8,-1.1,-0.5)),vec(0.15,0.02,0.15),entity():toWorld(ang(0,-90,0)),RenFCSL_GREY,"models/sprops/misc/alphanum/alphanum_0.mdl")
+            holoParent(Index,entity())
+            holoMaterial(Index,RenFCSL_DISPLAYMAT)
+            holoDisableShading(Index,1)
+            holoBodygroup(Index,0,3)
+            Index++
+        break
+    }
+
+    return Index
+}
+
+#[This function updates everything relating to the display
+Inputs:
+    Range [NUMBER] - The range the display will show
+    Active [NUMBER] - Turns on/off the backlight
+]#
+function void renFCSLUpdateDisplay(Range:number,Active:number)
+{
+    #Update the range display if we have one
+    if(RenFCSL_DISPDIGIT!=-1)
+    {
+        local RoundedRange = min(int(Range),999)
+        local StringRange = RoundedRange:toString()
+
+        if(changed(RoundedRange))
+        {
+            if(RoundedRange > 100)
+            {
+                holoModel(RenFCSL_DISPDIGIT,"models/sprops/misc/alphanum/alphanum_"+StringRange:index(1)+".mdl")
+                holoModel(RenFCSL_DISPDIGIT+1,"models/sprops/misc/alphanum/alphanum_"+StringRange:index(2)+".mdl")
+                holoModel(RenFCSL_DISPDIGIT+2,"models/sprops/misc/alphanum/alphanum_"+StringRange:index(3)+".mdl")
+            }
+            elseif(RoundedRange > 10)
+            {
+                holoModel(RenFCSL_DISPDIGIT,"models/sprops/misc/alphanum/alphanum_0.mdl")
+                holoModel(RenFCSL_DISPDIGIT+1,"models/sprops/misc/alphanum/alphanum_"+StringRange:index(1)+".mdl")
+                holoModel(RenFCSL_DISPDIGIT+2,"models/sprops/misc/alphanum/alphanum_"+StringRange:index(2)+".mdl")
+            }
+            else
+            {
+                holoModel(RenFCSL_DISPDIGIT,"models/sprops/misc/alphanum/alphanum_0.mdl")
+                holoModel(RenFCSL_DISPDIGIT+1,"models/sprops/misc/alphanum/alphanum_0.mdl")
+                holoModel(RenFCSL_DISPDIGIT+2,"models/sprops/misc/alphanum/alphanum_"+StringRange:index(1)+".mdl")
+            }
+        }
+    }
+
+    #Update the backlight if we have one
+    if(RenFCSL_DISPBACKLIGHT!=-1)
+    {
+        holoColor(RenFCSL_DISPBACKLIGHT, Active ? RenFCSL_ORANGE : RenFCSL_BLACK)
+        holoDisableShading(RenFCSL_DISPBACKLIGHT,Active)
+    }
+}
+
+#[Computes a solution based on our range to the target and super elevation, used with interpolation
+Inputs:
+    Range [NUMBER] - Range to target
+    Angle [NUMBER] - Angle aiming up
+Return:
+    [NUMBER] - How high to aim up (Solution = vec(0,0,Opposite))
+]#
+function number renFCSLFindOpposite(Range:number,Angle:number)
+{
+    return abs((Range*RenFCSL_CONVERT)*tan(Angle))
+}
+
+
+#//REDS FUNCTIONS\\#
+#[Generates a range table of the gun entity; By: Red
+Inputs:
+    Gun [ENTITY] - The Gun entity that the range table will be built for
+    Index [NUMBER] - The hologram index this function will use
+Output:
+    [ARRAY] - The range table to feed into interpolation
+]#
+function array renFCSLTableCreate(Gun:entity,Index:number)
+{
+    #A reference holo
+    holoCreate(Index,vec(),vec(),ang())
+    local ReferenceEntity = holoEntity(Index)
+    #Primary setups
+    local Muzvel = Gun:acfMuzzleVel()
+    local DragConstant = ( (3.1416 * (Gun:acfCaliber()/2)^2 )/10000)/(100*Gun:acfProjectileMass())
+    local ACCEL = vec(0,0,-gravity())
+    local Timescale = 0.066 #Timescale.  Perfect accuracy is at 0.066.  0.066*2 gives a still fairly good accuracy.  Drift will increase in proprtion to timescale accumulation errors.
+    local Coordinates = array()
+    #Initial flight setup
+    local Flight = ReferenceEntity:forward():setZ(0) * (Muzvel * 39.37)
+    local Pos = ReferenceEntity:pos()
+    local Drag = vec()
+    local NextPos = vec()
+    #Used for range comparison, and drop adjustment
+    local StartPos = Pos
+    #Flags for data, will use for interpolation & storage later
+    local TableIncrements = 10  #Range Increments
+    local TableMaxRange = 1140   #Maximum range
+    local TableSlot = 1         #Slot it's attempting to insert data, start at 1
+    #Stating value
+    local Distance = 0
+    #Backup to prevent failure on empty guns
+    if(!Muzvel) {return Coordinates}
+    #Actual ballistics table tabulation--accurate out to approximately 15 degrees drop deflection
+    for(N=1,151)
+    {
+        Drag = Flight:normalized()*(DragConstant*Flight:length2())/RenFCSL_DRAGDIV
+        NextPos = Pos + Flight*Timescale
+        Flight = Flight + (ACCEL-Drag)*Timescale
+        #Debug
+        #holoCreate(N,NextPos)
+        #Array building--if we pass a certain point, it flags the condition being met, averages the point & its predecessor, and stores it.
+        Distance = ((NextPos - StartPos):setZ(0):length()) / 39.37 #This converts to meters, and, at the same time fixes the quite stupid gmod 1.33 map scaling thing.
+        while(Distance > (TableIncrements*TableSlot))
+        {
+            Coordinates:pushVector2(vec2(ReferenceEntity:elevation((Pos + NextPos) / 2),N*Timescale))
+            TableSlot++
+        }
+        if(Distance > TableMaxRange)
+        {
+            Coordinates:pushVector2(vec2(ReferenceEntity:elevation((Pos + NextPos) / 2),N*Timescale))
+            TableSlot++
+            holoDelete(Index)
+            return Coordinates
+        }
+        Pos = NextPos
+    }
+    #print(_HUD_PRINTCONSOLE,""+entity():getName()+": Failed to build total range table!\nTable compiled out to "+(Coordinates:count()*TableIncrements)+"m!",3)
+    holoDelete(Index) #Cleaning up our reference holo--I know it's a messy solution, it works though.
+    return Coordinates
+}
+
+#[Interpolates range table given range, outputs elevation and flight time; By: Red
+Inputs:
+    Table [ARRAY] - The range table we're using
+    Range [NUMBER] - The range we're looking up
+Output:
+    [VECTOR2] - Vector 2 of interpolated data [ELEVATION,FLIGHTTIME]
+]#
+function vector2 renFCSLTableInterpolate(Table:array,Range:number)
+{
+    local LowerBound = Table[floor(Range * 0.1),vector2]
+    local UpperBound = Table[ceil(Range * 0.1),vector2]
+    local InterpRatio = (Range % 10) * 0.1
+    return ((LowerBound * (1-InterpRatio)) + (UpperBound * InterpRatio)) * vec2(RenFCSL_GRAVITYRAT,1)
+}

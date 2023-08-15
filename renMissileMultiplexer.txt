@@ -1,0 +1,126 @@
+@name renMissileMultiplexer
+@inputs  [MSGBUS]:table #Generic Inputs
+@outputs [Fire Reload]:number [Tarpos]:vector #Generic Outputs
+@persist [Gunner]:entity #MSGBUS Inputs
+@persist [Saftey]:number #"Runtime" Variables
+@persist [INPUT]:number
+@trigger [MSGBUS]
+@model models/props_lab/reciever01b.mdl
+runOnKeys(Gunner,1)
+#[
+E2 By:
+    Renco - Nearly Everything
+    Red - MSGBUS
+
+!!!!!
+DO-NOT RE-DISTRIBUTE!
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+A simple E2 for controlling a stationary ATGM launcher thing without the bulk of needing a turret E2
+A very nieche device indeed
+(I guess you could use this for other things)
+
+
+
+//////////VERSION LOG\\\\\\\\\\
+V0.0.0 (01-04-21) - Initial Development
+V1.0.0 (01-04-21)
+    [ADDED] Added basic code for firing and reloading
+    [ADDED] Added a setting to disable player input code
+
+
+
+//////////TO-DO\\\\\\\\\\
+
+/////DONE\\\\\
+
+
+
+//////////MSGBUS\\\\\\\\\\
+/////MSGBUS INPUTS\\\\\
+GUNNER [ENTITY] - Gunner controlling armament
+AIMPOS [VECTOR] - Aimpos
+MAIN_GUN_SELECTED_BALLISTIC_SOLUTION [VECTOR] - Ballistic solution from FCS
+
+/////MSGBUS OUTPUTS\\\\\
+]#
+
+
+#//////////INITIALIZATION\\\\\\\\\\#
+#Reset the E2 if we have been duped or the dupe has finished spawning
+if(duped()|dupefinished()) {reset()}
+
+#Everyone wants to rule the world
+if(first())
+{
+    #/////SETTINGS\\\\\#
+    #Enables/disables player input code (No firing/reloading(
+    INPUT = 1 #Default: 1
+
+
+
+    #/////LIBRARIES\\\\\#
+    #include "renKeyLib"
+
+
+
+    #/////FUNCTIONS\\\\\#
+    #[Import the stuff from the bus stuff
+    ]#
+    function void msgBusIn()
+    {
+        if(->MSGBUS)
+        {
+            Gunner = MSGBUS["GUNNER",entity]
+            Tarpos = MSGBUS["AIMPOS",vector]+MSGBUS["MAIN_GUN_SELECTED_BALLISTIC_SOLUTION",vector]
+        }
+    }
+
+
+
+    #/////FINALIZE\\\\\#
+    #//VERSION\\#
+    VERSION = "V1.0.0"
+    setName("renMissileMultiplexer "+VERSION)
+
+    #//FINALIZE MSGBUS\\#
+    #Push the name of the E2 to the bus
+    MSGBUS["NODE_NAMES",array]:pushString(entity():getName())
+    msgBusIn()
+}
+
+
+
+elseif(inputClk())
+{
+    msgBusIn()
+}
+
+
+
+elseif(keyClk(Gunner))
+{
+    if((!Gunner:isTyping())&Gunner:vehicle()&INPUT)
+    {
+        local Key = keyClkPressed()
+        local Pressed = Gunner:keyPressed(Key)
+
+        switch(Key)
+        {
+            case RenKL_KEYS["SAFTEY",string],
+                Saftey = Pressed
+            break
+            
+            case RenKL_KEYS["NEXT_WEAPON",string],
+                if(Saftey) {Reload = Pressed}
+            break
+            
+            default,
+                Fire = Gunner:keyAttack1()
+            break
+        }
+    }
+}

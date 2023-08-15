@@ -1,0 +1,33 @@
+@name renTravelLock
+@inputs [MSGBUS]:table [Gun]:entity
+@trigger [MSGBUS]
+
+
+#//////////INITIALIZATION\\\\\\\\\#
+#Reset the E2 if we have been duped or the dupe has finished spawning
+if(duped()|dupefinished()) {reset()}
+
+#This is it
+if(first())
+{
+    local Index = 0
+    local Scale = vec(1)
+    local ScaleV = 1
+    
+    holoCreate(Index,entity():toWorld(vec(0)),vec(0.5,0.5,1)*Scale,entity():toWorld(ang(0,0,90)),vec4(255),"hq_cylinder")
+    holoParent(Index,entity())
+    holoMaterial(Index,"models/gibs/metalgibs/metal_gibs")
+    local Parent = holoEntity(Index)
+    Index++
+    
+    holoCreate(Index,Parent:toWorld(vec(12.25,0,0)*Scale),vec(1)*Scale,Parent:toWorld(ang(0,0,-90)),vec4(255),"models/gibs/scanner_gib01.mdl")
+    holoParent(Index,Parent)
+    holoMaterial(Index,"models/gibs/metalgibs/metal_gibs")
+    Index++
+    
+    local Caliber = Gun:acfCaliber()/140
+    holoCreate(Index,Parent:toWorld(vec(22.5,0,0)*Scale),vec(Caliber,Caliber,0.5)*Scale,Parent:toWorld(ang(0,0,90)),vec4(255),"hq_tube")
+    holoParent(Index,Parent)
+    holoMaterial(Index,"models/gibs/metalgibs/metal_gibs")
+    Index++
+}

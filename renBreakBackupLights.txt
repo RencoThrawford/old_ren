@@ -1,0 +1,293 @@
+@name renBreakBackupLights
+@inputs [MSGBUS]:table [Light Plate]:entity [Lights Plates]:array #Generic inputs
+@persist [Breaks_Applied]:number [Transmission_Mode]:string #Inputs from MSGBUS
+@persist [SERIALNUMBER]:number [VERSION]:string [BREAKLIGHTREFS REVERSELIGHTREFS]:array #Global Variables
+@persist [REVERSELIGHTS BREAKLIGHTS]:array #User settings
+@trigger [MSGBUS]
+@model models/sprops/rectangles/size_1_5/rect_6x6x3.mdl
+#[
+E2 By:
+    Renco - Everything
+
+!!!!!
+REALLY DO-NOT RE-DISTRIBUTE!
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+A simple MSGBUS device that does the break/backup lights
+
+LIGHTS:
+    Standard model - models/sprops/cuboids/height06/size_1/cube_6x6x6.mdl
+    Simple full half model - models/sprops/rectangles/size_1_5/rect_6x6x3.mdl
+    Sci-Fi - models/sprops/rectangles/size_1_5/rect_6x18x3.mdl
+
+PLATES:
+    Standard model - models/sprops/cuboids/height06/size_1/cube_6x18x6.mdl
+    Thin plate - models/sprops/trans/plates/license_2.mdl
+
+
+
+//////////VERSION LOG\\\\\\\\\\
+V0.0.0 (12-11-20) - Initial Devlopment
+V1.0.0 (12-11-20) - Complete
+V1.0.1 (12-26-20)
+    [FIXED] Several undocumented issues
+    [FIXED] Fixed wrong lights lighting up
+V1.1.0 (01-04-21)
+    [ADDED] number entity:createLights(number); Creates the holograms for break/backuplights
+    [ADDED] number entity:createNumbers(number); Creates the holograms for a serial plate
+    [ADDED] Added ability to use multiple lights and serial plates
+    [ADDED] Added new break/backup lights model: models/sprops/rectangles/size_1_5/rect_6x6x3.mdl
+V1.1.1 (01-20-21)
+    [ADDED] Added new sci-fi lights inspired by Fizzle's rendition of beatrice
+    [ADDED] Added new plate model based on somthing of Red's
+
+
+
+//////////TO-DO\\\\\\\\\\
+Better serial plate printing
+    More dynamic so you could potentially use any model
+
+/////DONE\\\\\
+
+
+
+//////////MSGBUS\\\\\\\\\\
+/////MSGBUS INPUTS\\\\\
+BREAKS_APPLIED    [NUMBER]  - If breaks are currently being applied
+TRANSMISSION_MODE [STRING]  - Current transmission mode
+
+////MSGBUS OUTPUTS\\\\\
+]#
+
+
+#//////////INITIALIZATION\\\\\\\\\#
+#Reset the E2 if we have been duped or the dupe has finished spawning
+if (duped()|dupefinished()) {reset()}
+
+#Giving away your position
+if(first())
+{
+    #/////SETTINGS\\\\\#
+    #//LOOKS\\#
+    #Flips the lights around to the other side
+    local Flip = 0 #Default: 0
+
+    #Sets the colour of the E2
+    local Camo = "yellow" #Default: "red"
+
+    #Sets the material of the E2 if the selected colour dosent change materials
+    local CamoMat = "" #Default: ""
+
+    #Sets the colour of the break lights off, on
+    BREAKLIGHTS[0,vector] = vec(80,10,10) #Default: vec(80,10,10)
+    BREAKLIGHTS[1,vector] = vec(250,50,50) #Default: vec(250,50,50)
+
+    #Sets the colour of the reverse lights off, on
+    REVERSELIGHTS[0,vector] = vec(50) #Default: vec(50)
+    REVERSELIGHTS[1,vector] = vec(250) #Default: vec(250)
+
+
+    #//MISC\\#
+    #Changes at what index the holograms start to spawn at
+    local Index = 0 #Default: 0
+
+
+
+    #/////LIBRARIES\\\\\#
+    #include "renHoloCamoLib"
+
+
+
+    #/////INITIALIZE VARIABLES\\\\\#
+    SERIALNUMBER = randint(11111,99999) #Generates a serial number.
+
+
+
+    #/////FUNCTIONS\\\\\#
+    #//MSGBUS\\#
+    #[Grabs stuff from the bus
+    ]#
+    function void msgBusIn()
+    {
+        if(->MSGBUS)
+        {
+            Breaks_Applied = MSGBUS["BREAKS_APPLIED",number]
+            Transmission_Mode = MSGBUS["TRANSMISSION_MODE",string]
+        }
+    }
+
+
+    #//HOLOGRAM CREATION\\#
+    #[Creates the holograms for break/backup lights
+    Inputs:
+        [ENTITY] - The entity that the lights will be created on
+        Index [NUMBER] - The index the lights will start to spawn at
+    Return:
+        [NUMBER] - The last index used + 1
+    ]#
+    function number entity:createLights(Index:number)
+    {
+        if(This:isValid())
+        {
+            switch(This:model())
+            {
+                #Standard model
+                case "models/sprops/cuboids/height06/size_1/cube_6x6x6.mdl",
+                    #Reverse light
+                    holoCreate(Index,This:toWorld(vec(0,0,0.5)),vec(1),This:angles(),BREAKLIGHTS[0,vector],"models/props_junk/PopCan01a.mdl")
+                    holoParent(Index,This)
+                    holoMaterial(Index,"holograms/hologram")
+                    BREAKLIGHTREFS:pushNumber(Index)
+                    Index++
+
+                    #Break light
+                    holoCreate(Index,This:toWorld(vec(-1.8,1.8,2)),vec(0.4),This:angles(),REVERSELIGHTS[0,vector],"models/props_junk/PopCan01a.mdl")
+                    holoParent(Index,This)
+                    holoMaterial(Index,"holograms/hologram")
+                    REVERSELIGHTREFS:pushNumber(Index)
+                    Index++
+                break
+                
+                #Simple full half model
+                case "models/sprops/rectangles/size_1_5/rect_6x6x3.mdl",
+                    #Reverse light
+                    holoCreate(Index,This:toWorld(vec(0,0,1)),vec(1.25,1.25,0.5),This:toWorld(ang(0)),BREAKLIGHTS[0,vector],"models/props_junk/PopCan01a.mdl")
+                    holoParent(Index,This)
+                    holoMaterial(Index,"holograms/hologram")
+                    holoClipEnabled(Index,1)
+                    holoClip(Index,vec(0),vec(0,1,0),0)
+                    BREAKLIGHTREFS:pushNumber(Index)
+                    Index++
+
+                    #Break light
+                    holoCreate(Index,This:toWorld(vec(0,0,1)),vec(1.25,1.25,0.5),This:toWorld(ang(0)),REVERSELIGHTS[0,vector],"models/props_junk/PopCan01a.mdl")
+                    holoParent(Index,This)
+                    holoMaterial(Index,"holograms/hologram")
+                    holoClipEnabled(Index,1)
+                    holoClipEnabled(Index,1)
+                    holoClip(Index,vec(0),vec(0,-1,0),0)
+                    REVERSELIGHTREFS:pushNumber(Index)
+                    Index++
+                break
+
+                #Sci-Fi
+                case "models/sprops/rectangles/size_1_5/rect_6x18x3.mdl",
+                    #Break Light
+                    holoCreate(Index,This:toWorld(vec(0,1.4,1.8)),vec(0.1,0.9,0.1),This:toWorld(ang(90,90,0)),BREAKLIGHTS[0,vector],"models/props_c17/light_decklight01_off.mdl")
+                    holoParent(Index,This)
+                    holoMaterial(Index,"holograms/hologram")
+                    BREAKLIGHTREFS:pushNumber(Index)
+                    Index++
+
+                    #Reverse Light
+                    holoCreate(Index,This:toWorld(vec(0,-1.4,1.8)),vec(0.1,0.9,0.1),This:toWorld(ang(90,90,0)),REVERSELIGHTS[0,vector],"models/props_c17/light_decklight01_off.mdl")
+                    holoParent(Index,This)
+                    holoMaterial(Index,"holograms/hologram")
+                    REVERSELIGHTREFS:pushNumber(Index)
+                    Index++
+                break
+            }
+        }
+
+        return Index
+    }
+
+    #[Creates holograms for a serial plate
+    Inputs:
+        [ENTITY] - The entity the holograms will be created for
+        Index [NUMBER] - The index the holograms will start to spawn at
+    Return:
+        [NUMBER] - The last index used + 1
+    ]#
+    function number entity:createNumbers(Index:number)
+    {
+        if(This:isValid())
+        {
+            local Explode = SERIALNUMBER:toString():explode("")
+
+            switch(This:model())
+            {
+                #Standard model
+                case "models/sprops/cuboids/height06/size_1/cube_6x18x6.mdl",
+                    local X = -10.5
+                    local Inc = 3.5
+                    for(N=1,Explode:count())
+                    {
+                        X = (X+Inc)
+
+                        holoCreate(Index,This:toWorld(vec(X,0,2.5)),vec(0.4),This:toWorld(ang(180,0,-90)),vec4(255),"models/sprops/misc/alphanum/alphanum_"+Explode[N,string]+".mdl")
+                        holoParent(Index,This)
+                        holoMaterial(Index,"holograms/hologram")
+                        holoBodygroup(Index,0,1)
+                        Index++
+                    }
+                break
+
+                #Thin Plate
+                case "models/sprops/trans/plates/license_2.mdl",
+                    local X = -10.5
+                    local Inc = 3.5
+                    for(N=1,Explode:count())
+                    {
+                        X = (X+Inc)
+
+                        holoCreate(Index,This:toWorld(vec(0.25,X,0)),vec(0.3,0.1,0.3),This:toWorld(ang(0,-90,0)),vec4(255),"models/sprops/misc/alphanum/alphanum_"+Explode[N,string]+".mdl")
+                        holoParent(Index,This)
+                        holoMaterial(Index,"holograms/hologram")
+                        holoBodygroup(Index,0,1)
+                        Index++
+                    }
+                break
+            }
+        }
+
+        return Index
+    }
+    
+    
+    
+    #/////HOLOGRAMS\\\\\#
+    local ALights = Lights:add(array(entity(),Light))
+    local APlates = Plates:add(array(entity(),Plate))
+
+    foreach(I,L:entity = ALights) {Index = L:createLights(Index)}
+    foreach(K,P:entity = APlates) {Index = P:createNumbers(Index)}
+
+
+
+    #/////INTIALIZE\\\\\#
+    #Setting the colour of the E2 for camo
+    renHCLE2(Camo,CamoMat)
+
+    #//VERSION\\#
+    VERSION = "V1.1.1"
+    setName("renBreakBackupLights "+VERSION)
+
+
+    #//FINALIZE MSGBUS\\#
+    #Push the name of this E2 to the bus
+    MSGBUS["NODE_NAMES",array]:pushString(entity():getName())
+
+    #Update bus.
+    msgBusIn()
+}
+
+
+
+#Grab stuff from the bus, and update the holograms
+elseif(inputClk())
+{
+    msgBusIn()
+
+    if(changed(Breaks_Applied)) {foreach(I,BL:number = BREAKLIGHTREFS) {holoColor(BL,BREAKLIGHTS[Breaks_Applied,vector]) holoDisableShading(BL,Breaks_Applied)}}
+
+    if(changed(Transmission_Mode))
+    {
+        local Reversing = (Transmission_Mode == "REVERSE")
+
+        foreach(K,RL:number = REVERSELIGHTREFS) {holoColor(RL,REVERSELIGHTS[Reversing,vector]) holoDisableShading(RL,Reversing)}
+    }
+}

@@ -1,0 +1,274 @@
+@name renLinker
+@inputs [Base]:entity [Link1 Link2]:array
+@outputs [Linked]:number
+@persist [INRANGE_FREQUENCY OUTRANGE_FREQUENCY MISC_FREQUENCY]:number #Frequncies
+@persist [DIST_LINK DIST_UNLINK DIST_RANGE VEL_THRESHOLD DEBUG]:number #User Settings
+@persist [Dist Vel HoloStep]:number [Reason]:string #"Runtime" Variables
+@persist [HOLOREF]:number [VERSION]:string [LINKS1 LINKS2]:table #Global Variables
+@trigger none
+@model models/props_lab/reciever01a.mdl
+#[
+E2 By:
+    Renco - Everything
+
+!!!!!
+REALLY DO-NOT RE-DISTRIBUTE!
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+This E2 links multiple weapons (guns/racks) and ammocrates together when the base entity is within certain thresholds to the E2
+If you don't want the hologram, just comment out the @model line :(
+USE:
+    Use advanced entity markers to mark the weapons and ammunitions you want to link together
+    Wire Link1 -> adv. e-marker
+    Wire Base -> Base of your vehicle (You can use an e-marker for this if you dont want your shit unfrozen when you fs (also prevents people from stealing your shit))
+    Refresh the E2 and it should function
+    You can optionally wire the actives and or refuels of refill crates to Linked on this e2 to help combat people stealing your precious fuel/ammunition
+
+
+//////////VERSION LOG\\\\\\\\\\
+V0.0.0 (01-12-21) - Initial Development
+V1.0.0 (01-12-21)
+    [ADDED] ownerConsole(string); Prints to the owner's console
+    [ADDED] ownerHint(string); Sends the owner a hint
+    [ADDED] number entity:entityDist(entity); Gets the distance between two entities
+    [ADDED] table array:linksSeparate(); Separates an array of entities into a table
+    [ADDED] number table:linksLink(number); Links things from the table returned from linksSeparate()
+    [ADDED] number table:linksUnlink(number); Unlinks things from the table returned from linksSeparate()
+]#
+
+
+#//////////INITIALIZATION\\\\\\\\\\#
+if(duped()|dupefinished()) {reset()}
+
+#At the start of everything
+if(first())
+{
+    #/////SETTINGS\\\\\#
+    #//LINK THRESHOLDS\\#
+    #Minimum distance to link everything
+    DIST_LINK = 300 #Default: 300
+
+    #Maximum distance to unlink everything
+    DIST_UNLINK = 400 #Default: 400
+
+    #Range at witch the E2 switches to a higher frequency mode
+    DIST_RANGE = 500 #Default: 500
+
+    #Maximum velocity to unlink
+    VEL_THRESHOLD = 350 #Default: 350
+
+
+    #//MISC\\#
+    #Starting index for holograms
+    local Index = 0 #Default: 0
+
+    #Toggles debug messages in console
+    DEBUG = 0 #Default: 0
+
+
+
+    #/////INITIALIZE VARIABLES\\\\\#
+    #//FREQUENCIES\\#
+    INRANGE_FREQUENCY = 150
+    OUTRANGE_FREQUENCY = 500
+    MISC_FREQUENCY = 75
+
+
+    #//"RUNTIME" VARIABLES\\#
+    HoloStep = -180
+    Reason = "N/A"
+
+
+
+    #/////HOLOGRAMS\\\\\#
+    #Bomb
+    switch(entity():model())
+    {
+        case "models/props_lab/reciever01a.mdl",
+            holoCreate(Index,entity():toWorld(vec(0,0,20)),vec(0.5),entity():toWorld(ang(45,HoloStep,0)),vec4(150),"models/missiles/fab250.mdl")
+            holoParent(Index,entity())
+            holoMaterial(Index,"models/ihvtest/eyeball_l")
+            holoDisableShading(Index,1)
+            holoRenderFX(Index,2)
+            Index++
+        break
+    }
+
+
+
+    #/////FUNCTIONS\\\\\#
+    #[Prints a message into the owner's console
+    Inputs:
+        Message [STRING] - The message to be sent
+    ]#
+    function void ownerConsole(Message:string)
+    {
+        if(DEBUG) {print(_HUD_PRINTCONSOLE,"[renLinker] "+Message)}
+    }
+
+    #[Hints a message to the owner
+    Inputs:
+        Message [STRING] - The message to be sent
+    ]#
+    function void ownerHint(Message:string)
+    {
+        hint("[renLinker] "+Message,5.5)
+    }
+    
+    #[Returns the distance from [ENTITY] to Entity
+    Inputs:
+        [ENTITY] - The first entity
+        Entity [ENTITY] - The second entity to get distance to
+    Return:
+        [NUMBER] - Distance from [ENTITY] to Entity
+    ]#
+    function number entity:entityDist(Entity:entity)
+    {
+        return ((This:pos() - Entity:pos()):setZ(0):length())
+    }
+
+    #[Creates a table with the guns and ammunition separated
+    Inputs:
+        [ARRAY] - An array of entities
+    Return:
+        [TABLE] - A table of ACF weapons and ammunition
+    ]#
+    function table array:linksSeparate()
+    {
+        local Return = table()
+        foreach(K,S:entity = This)
+        {
+            switch(S:type())
+            {
+                case "acf_rack",
+                case "acf_gun",
+                    if(!Return["weapons",array]:count()) {Return["weapons",array] = array()}
+                    Return["weapons",array]:pushEntity(S)
+                break
+                
+                case "acf_ammo",
+                    if(!Return["ammo",array]:count()) {Return["ammo",array] = array()}
+                    Return["ammo",array]:pushEntity(S)
+                break
+            }
+        }
+        ownerConsole("Found "+Return["weapons",array]:count()+" weapons & "+Return["ammo",array]:count()+" ammunition crates.")
+        soundPlay("working",15,"ambient/computer_working2.wav") soundVolume("working",0,15)
+        return Return
+    }
+
+    #[Links the weapon(s) to the ammocrate(s)
+    Inputs:
+        [TABLE] - Table returned from linksSeparate
+        Notify [NUMBER] - Turn on/off notifications as if you were using the tool
+    Return:
+        [NUMBER] - Amount of links succesfully creates
+    ]#
+    function number table:linksLink(Notify:number)
+    {
+        local Weapons = This["weapons",array]
+        local Ammo = This["ammo",array]
+        local Return = 0
+        if(Weapons:count()&Ammo:count())
+        {
+            foreach(K,G:entity = Weapons)
+            {
+                foreach(I,A:entity = Ammo)
+                {
+                    Return += G:acfLinkTo(A,Notify)
+                }
+            }
+            ownerConsole(Return+" out of "+(Weapons:count()*Ammo:count())+" linked.")
+            soundPlay("linked",1.5,"vehicles/atv_ammo_close.wav")
+        }
+        return Return
+    }
+
+    #[Unlinks weapon(s) from the ammocrate(s)
+    Inputs:
+        [TABLE] - Table returned from linksSeparate
+        Notify [NUMBER] - Turn on/off notifications as if you were using the tool
+    Return:
+        [NUMBER] - Amount of links succesfully unlinked
+    ]#
+    function number table:linksUnlink(Notify:number)
+    {
+        local Weapons = This["weapons",array]
+        local Ammo = This["ammo",array]
+        local Return = 0
+        if(Weapons:count()&Ammo:count())
+        {
+            foreach(K,G:entity = Weapons)
+            {
+                foreach(I,A:entity = Ammo)
+                {
+                    Return += G:acfUnlinkFrom(A,Notify)
+                }
+            }
+            ownerConsole(Return+" out of "+(Weapons:count()*Ammo:count())+" unlinked.")
+            soundPlay("unlinked",1.5,"vehicles/atv_ammo_open.wav")
+        }
+        return Return
+    }
+
+
+
+    #/////FINALIZE\\\\\#
+    #//BUILDING VARIABLES\\#
+    LINKS1 = Link1:linksSeparate()
+    LINKS2 = Link2:linksSeparate()
+    Dist = entity():entityDist(Base)
+
+
+    #//TIMERS\\#
+    timer("link",INRANGE_FREQUENCY)
+    timer("misc",MISC_FREQUENCY)
+
+
+    #//VERSION\\#
+    VERSION = "V1.0.0"
+    setName("renLinker "+VERSION)
+}
+
+
+
+elseif(clk("link"))
+{
+    Dist = entity():entityDist(Base)
+    Vel = Base:vel():length()
+    timer("link",((Dist <= DIST_RANGE) ? INRANGE_FREQUENCY : OUTRANGE_FREQUENCY))
+
+    if(Vel < VEL_THRESHOLD)
+    {
+        if((Dist > DIST_UNLINK)&Linked) {LINKS1:linksUnlink(0) LINKS2:linksUnlink(0) Linked = 0 Reason = "Out of range" ownerHint("Unlinked!")}
+        elseif((Dist < DIST_LINK)&(Linked==0)) {LINKS1:linksLink(0) LINKS2:linksLink(0) Linked = 1 Reason = "In range" ownerHint("Linked!")}
+    }
+
+    elseif(Linked) {LINKS1:linksUnlink(0) LINKS2:linksUnlink(0) Linked = 0 Reason = "Overspeed" ownerHint("Unlinked due to excessive speed!")}
+}
+
+
+
+elseif(clk("misc"))
+{
+    timer("misc",MISC_FREQUENCY)
+    local Active = (Dist <= DIST_RANGE)
+
+    if(changed(Linked)|changed(Active))
+    {
+        setName("renLinker "+VERSION+"\n"+
+        (Linked ? "Linked" : "Unlinked")+" ("+Reason+")\n"+
+        (Active ? "ACTIVE" : "IDLE")+": "+(Active ? INRANGE_FREQUENCY : OUTRANGE_FREQUENCY)+"ms")
+    }
+
+    if(holoEntity(HOLOREF))
+    {
+        if((HoloStep+1)>180) {HoloStep = -180} else{HoloStep++}
+        holoAng(HOLOREF,entity():toWorld(ang(45,HoloStep,0)))
+        holoPos(HOLOREF,entity():toWorld(vec(0,0,(sin(HoloStep)*3.5)+20)))
+        holoColor(HOLOREF,(Linked ? vec4(100,200,100,150) : vec4(200,100,100,150)))
+    }
+}

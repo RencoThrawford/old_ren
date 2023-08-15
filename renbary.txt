@@ -1,0 +1,754 @@
+@name Renbary
+@persist [REN_LastLase]:normal #Memory
+@persist [UC_Red UC_Green UC_Neutral]:vector4 [UC_Col]:table [UC_RadarRangeRatio UC_RadarRangeLength]:normal #Global Variables
+@autoupdate Renbary
+@model models/props_c17/consolebox03a.mdl
+#PLEASE DO-NOT RE-DISTRIBUTE!
+#E2 Made By: Renco
+#Version Log
+#V0.10 (7-22-18)  - Added the randomSound, setCamo, and setCamoMod functions
+#V0.11 (7-24-18)  - Added holoVis
+#V0.12 (12-6-18)  - Changed randomSound to use randin() instead of using round(random())
+#V0.13 (12-12-18) - Added setCamoCol and setCamoColMod
+#V0.14 (3-19-19)  - Prints current version number into console, as well as telling the user that it has been included in an e2, Notify the user that they're just doing it wrong
+#V0.15 (3-20-19)  - Added fireInterlock, and added better documentation for functions
+#V0.16 (3-21-19)  - holoVisInv, and inverted version of holoVis
+#V0.17 (3-21-19)  - Added traverseSound
+#V0.18 (3-22-19)  - Added renLase
+#V0.19 (3-26-19)  - Added ucGenericScope and ucGSFLIRUpdate, in preparation to rewrite the universal camera
+#V0.20 (3-27-19)  - Added ucCreateDayAimer, ucUpdateObjectiveIndicatorCol, and ucUpdateReadinessIndicator
+#V0.21 (3-30-19)  - Added ucCleanupAimer, and ucCreateNVAimer
+#V0.22 (4-21-19)  - Updated camo functions to have a default colour and/or texture if there is no sample specified (minor update)
+#End of Version Log
+#Version number output to console
+local VersionNumber = 0.22
+print(_HUD_PRINTCONSOLE,""+entity():getName()+": Renbary " + VersionNumber + " imported!")
+
+
+
+#!!!!!!!!!!GLOBAL VARIABLES!!!!!!!!!!#
+#/////UNIVERSAL CAMERA GLOBAL VARIABLES\\\\\#
+#Aimer Colours
+UC_Red = vec4(255,100,100,180)
+UC_Green = vec4(100,255,100,180)
+UC_Neutral = vec4(100,100,100,180)
+
+#Objective Indicator Colours
+UC_Col = table()
+UC_Col["ATTACK",table] = table() UC_Col["ATTACK",table]["color",vector] = vec(255,50,50)
+UC_Col["DEFEND",table] = table() UC_Col["DEFEND",table]["color",vector] = vec(255,255,50)
+UC_Col["ARTY",table] = table() UC_Col["ARTY",table]["color",vector] = vec(255,128,50)
+UC_Col["SUPPLY",table] = table() UC_Col["SUPPLY",table]["color",vector] = vec(50,255,50)
+UC_Col["POSITION",table] = table() UC_Col["POSITION",table]["color",vector] = vec(128,128,255)
+UC_Col["MSG",table] = table() UC_Col["MSG",table]["color",vector] = vec(250)
+
+UC_RadarRangeRatio = 0.03
+#UC_RadarRangeRatio = 0.05
+UC_RadarRangeLength = 800 * 39.37
+
+
+
+#!!!!!!!!!!FUNCTIONS!!!!!!!!!!#
+#This is my random sound function
+#To use it, give it a array of sounds starting from 0, an entity to play the sounds from, and an index number
+#input: Sounds - An array of sounds that the E2 will randomly choose from when you call this function
+#input: Entity - The entity the sound will play on
+#input: Index  - The index the sound will play at
+function void randomSound(Sounds:array,Entity:entity,Index:normal)
+{
+    local SoundCount = Sounds:count()
+    local RNG = randint(SoundCount)
+    
+    Entity:soundPlay(Index,0,Sounds[RNG,string])
+}
+
+
+#This is my set camo function, it sets the materials and colours of an array of holos to the sample's materials and colours
+#To use it, give it an array of holograms, and a sample entity
+#input: Holos  - An array of hologram indexs (numbers) that the hologram will set colours to
+#input: Sample - The entity that the colours and materials will be copied from
+function void setCamo(Holos:array,Sample:entity)
+{
+    local SampleColour = Sample:getColor()
+    local SampleMaterial = Sample:getMaterial()
+    
+    if(!Sample:isValid()) {SampleColour = vec(255) SampleMaterial = "sprops/sprops_grid_12x12"}
+    
+    for(I=1,Holos:count())
+    {
+        holoColor(Holos[I,normal],SampleColour)
+        holoMaterial(Holos[I,normal],SampleMaterial)
+    }
+}
+
+
+#This is my set camo function, it sets the materials and colours of an array of holos to the sample's colours
+#To use it, give it an array of holograms, and a sample entity
+#input: Holos  - An array of hologram indexs (numbers) that the hologram will set colours to
+#input: Sample - The entity that the colours will be copied from
+function void setCamoCol(Holos:array,Sample:entity)
+{
+    local SampleColour = Sample:getColor()
+    
+    if(!Sample:isValid()) {SampleColour = vec(255)}
+    
+    for(I=1,Holos:count())
+    {
+        holoColor(Holos[I,normal],SampleColour)
+    }
+}
+
+
+#This is my alternate version of the set camo function, it makes the colour lighter or darker depending upon the colour of the sample
+#To use it, give it an array of holograms, and a sample entity 
+#input: Holos  - An array of hologram indexs (numbers) that the hologram will set colours to
+#input: Sample - The entity that the colours and materials will be copied from
+function void setCamoMod(Holos:array,Sample:entity)
+{
+    local SampleColour = Sample:getColor()
+    local SampleMaterial = Sample:getMaterial()
+    
+    if(!Sample:isValid()) {SampleColour = vec(255) SampleMaterial = "sprops/sprops_grid_orange_12x12"}
+    
+    if(SampleColour:length() < vec(127.5):length())
+    {
+        for(I=1,Holos:count())
+        {
+            holoColor(Holos[I,normal],SampleColour*2)
+            holoMaterial(Holos[I,normal],SampleMaterial)
+        }
+    }
+    
+    #If the last if statement was false, check if the values were greater than instead of less than
+    elseif(SampleColour:length() > vec(127.5):length())
+    {
+        for(I=1,Holos:count())
+        {
+            holoColor(Holos[I,normal],SampleColour/2)
+            holoMaterial(Holos[I,normal],SampleMaterial)
+        }
+    }
+    
+    #If the last two statements were false, check if the values were equal instead of less than or greater than
+    elseif(SampleColour:length() == vec(127.5):length())
+    {
+        for(I=1,Holos:count())
+        {
+            holoColor(Holos[I,normal],SampleColour)
+            holoMaterial(Holos[I,normal],SampleMaterial)
+        }
+    }
+}
+
+
+#This is my alternate version of the set camo colour function, it makes the colour lighter or darker depending upon the colour of the sample
+#To use it, give it an array of holograms, and a sample entity
+#input: Holos  - An array of hologram indexs (numbers) that the hologram will set colours to
+#input: Sample - The entity that the colours and materials will be copied from
+function void setCamoColMod(Holos:array,Sample:entity)
+{
+    local SampleColour = Sample:getColor()
+    
+    if(!Sample:isValid()) {SampleColour = vec(255)}
+    
+    if(SampleColour:length() < vec(127.5):length())
+    {
+        for(I=1,Holos:count())
+        {
+            holoColor(Holos[I,normal],SampleColour*2)
+        }
+    }
+    
+    #If the last if statement was false, check if the values were greater than instead of less than
+    elseif(SampleColour:length() > vec(127.5):length())
+    {
+        for(I=1,Holos:count())
+        {
+            holoColor(Holos[I,normal],SampleColour/2)
+        }
+    }
+    
+    #If the last two statements were false, check if the values were equal instead of less than or greater than
+    elseif(SampleColour:length() == vec(127.5):length())
+    {
+        for(I=1,Holos:count())
+        {
+            holoColor(Holos[I,normal],SampleColour)
+        }
+    }
+}
+
+
+#This is some of red's code, you give it a player, and an array of holo's, when you call this function, it will hide the holograms from everyone but that player
+#input: Player - The player that can see the holograms
+#input: Holos  - An array of hologram indexs (numbers) to hide/show the holograms
+function void holoVis(Player:entity,Holos:array)
+{
+    local OtherPlayers = array()
+    foreach(K,V:entity = players())
+    {
+        if(V != Player) {OtherPlayers:pushEntity(V)}
+    }
+    
+    for(I=1,Holos:count())
+    {
+        holoVisible(Holos[I,normal],OtherPlayers,0)
+        holoVisible(Holos[I,normal],Player,1)
+    }
+}
+
+
+#This is a function to manipulate holotext for a rangefider
+#input: Index - The starting index for the digits
+#input: Range - The number to set the holograms to
+function void rangeUpdate(Index:normal,Range:normal)
+{
+        local RangeS = clamp(Range,0,999):toString()
+        local RangeE = RangeS:explode("")
+        
+        if(Range >= 100)
+        {
+            holoModel(Index,"models/sprops/misc/alphanum/alphanum_"+RangeE[1,string]+".mdl")
+            holoModel(Index+1,"models/sprops/misc/alphanum/alphanum_"+RangeE[2,string]+".mdl")
+            holoModel(Index+2,"models/sprops/misc/alphanum/alphanum_"+RangeE[3,string]+".mdl")
+        }
+        elseif(Range >= 10)
+        {
+            holoModel(Index,"models/sprops/misc/alphanum/alphanum_0.mdl")
+            holoModel(Index+1,"models/sprops/misc/alphanum/alphanum_"+RangeE[1,string]+".mdl")
+            holoModel(Index+2,"models/sprops/misc/alphanum/alphanum_"+RangeE[2,string]+".mdl")
+        }
+        else
+        {
+            holoModel(Index,"models/sprops/misc/alphanum/alphanum_0.mdl")
+            holoModel(Index+1,"models/sprops/misc/alphanum/alphanum_0.mdl")
+            holoModel(Index+2,"models/sprops/misc/alphanum/alphanum_"+RangeE[1,string]+".mdl")
+        }
+}
+
+
+#This is a function to setPos/Ang of a prop/entity to a hologram, then parent it
+#input: Index  - The hologram index you would like to parent to
+#input: Entity - The entity you would like to be parented
+function void parentHolo(Index:normal,Entity:entity)
+{
+    local HoloE = holoEntity(Index)
+    
+    if(Entity:parent()!=HoloE&Entity:isValidPhysics())
+    {
+        local EPos = Entity:pos()
+        local HPos = HoloE:pos()
+        local PosDiff = EPos-HPos
+        
+        local EAng = Entity:angles()
+        local HAng = HoloE:angles()
+        local AngDiff = EAng-HAng
+        
+        if(inrange(PosDiff,vec(-0.01),vec(0.01))&inrange(AngDiff,ang(-0.01),ang(0.01))&Entity:parent()!=HoloE)
+        {
+            Entity:parentTo(HoloE)
+            #print(Entity:type()+" parented!")
+        }
+        elseif(Entity:parent()!=HoloE)
+        {
+            Entity:setPos(HPos)
+            Entity:setAng(HAng)
+        }
+    }
+}
+
+
+#This function checks if the gun is within acceptable bounds to fire; you should call this whenever you want to fire
+#input: Gun            - The entity used to perform the interlock on
+#input: AimPos         - Where we're aiming
+#input: AngOffset      - Used if you're using an FCS
+#input: Bound          - Angle in wich the gun has to be in to fire, if set to 0 it is forcibly disabled
+#input: BlastRadiusInt - If set to 1, it will check infront of the gun, if the distance is less than or equal to the blast radius, it will not allow you to fire (useful for artillery)
+#input: Override       - Manually overrides the interlock
+#return: Returns wether or not the gun can fire with the set bound, or if it has been overriden
+function number fireInterlock(Gun:entity,AimPos:vector,AngOffset:angle,Bound:normal,BlastRadiusInt:normal,Override:normal)
+{
+    #If we have chosen to disable it, or if we have the override codes, just return 1
+    if(Bound == 0|Override) {return 1}
+    
+    #Or else we return something useful
+    else
+    {
+        #/////HEADING INTERLOCK\\\\\#
+        #Extracting the pitch and yaw offsets from AngOffset
+        local PitchOffset = AngOffset[1]
+        local YawOffset = AngOffset[2]
+        
+        #Getting the heading from the gun to where we're aiming
+        local Heading = Gun:heading(AimPos)
+        
+        #Extracting the elevation and bearing, while adding our offsets
+        local Elevation = Heading[1]+abs(PitchOffset)
+        local Bearing = Heading[2]+YawOffset
+        
+        
+        #/////BLAST RADIUS INTERLOCK\\\\\#
+        local BlastRadius = Gun:acfBlastRadius()
+        
+        #Getting the hit position, should go out to 50 m
+        local Forward = Gun:forward()
+        local HitDist = (rangerOffset(1968.5,Gun:attachmentPos("muzzle")+Forward,Forward):distance())/39.37
+            
+        local BRI = (HitDist <= BlastRadius)*BlastRadiusInt
+        
+        
+        #Finally, we return wether or not the gun is in acceptable bounds
+        return (((abs(Bearing) <= Bound)&(abs(Elevation) <= Bound))&(!BRI))
+    }
+}
+
+
+#This is some of red's code, you give it a player, and an array of holo's, when you call this function, it will show the holograms to everyone but that player
+#The only reason this exists is because I want maximum compatability with old code, I know I could just add another paramater to the function
+#input: Player - The player that cannot see the holograms
+#input: Holos  - An array of hologram indexs (numbers) to hide/show the holograms
+function void holoVisInv(Player:entity,Holos:array)
+{
+    local OtherPlayers = array()
+    foreach(K,V:entity = players())
+    {
+        if(V != Player) {OtherPlayers:pushEntity(V)}
+    }
+    
+    for(I=1,Holos:count())
+    {
+        holoVisible(Holos[I,normal],OtherPlayers,1)
+        holoVisible(Holos[I,normal],Player,0)
+    }
+}
+
+
+#This function manipulates the volume of a sound as the gun traverses, the closer to the AimPos+AngOffset it gets, the softer the sound gets; works kinda like Red's
+#input: Gun        - The Gun entity for checking the heading on
+#input: AimPos     - Where we're aiming
+#input: AngOffset  - The offset outputted by an fcs, if you're not using one, just use ang(0)
+#input: SoundIndex - The index of the sound to be manipulated (A number)
+function void traverseSound(Gun:entity,AimPos:vector,AngOffset:angle,SoundIndex:normal)
+{
+    #Getting the heading of the gun to the AimPos, also subtracting the offset
+    local Heading = Gun:heading(AimPos)-AngOffset
+    
+    #Adding the Elevation and Bearing, then dividing by 5, also absoluting because volume cannot be lower than 0
+    local Length = abs(Heading[1]+Heading[2])/5
+    
+    
+    #Finally we set the volume to the clamp of the length
+    soundVolume(SoundIndex,clamp(Length,0,1))
+}
+
+
+#This function is kinda useless
+#input: StartPos   - Where the lase will originate from
+#input: AimPos     - Where the lase will be directed twords
+#input: LastReturn - What this function last returned
+#input: Curtime    - curtime()
+#return: Returns an array with the position and range of the lase data
+function array renLase(StartPos:vector,AimPos:vector,LastReturn:array,Curtime:normal)
+{
+    if(Curtime > (REN_LastLase + 0.5))
+    {
+        REN_LastLase = Curtime
+        
+        local Direction = (AimPos-StartPos):normalized()
+        
+        local Trace = rangerOffset(9999999999,StartPos+Direction,Direction)
+        
+        local Position = Trace:position()
+        
+        local Range = round(StartPos:distance(Position)/39.37)
+        
+        return array(Trace:position(),Range)
+    }
+    else
+    {
+        print("You cannot lase right now.")
+        return LastReturn
+    }
+}
+
+
+#This function just spawns a generic scope, no aimer or anything, you can make your own aimer with holos, or EGP
+#input: HoloIndex - The hologram index at which the scope holograms will start to spawn at, they will be parented with the previous hologram
+#return: Returns an array of the holograms used, the first entry will always be the scope tube, the second will always be the scope glass
+function array ucGenericScope(HoloIndex:normal)
+{
+    #Getting information to spawn the holograms
+    local Parent = HoloIndex-1
+    local ParentE = holoEntity(Parent)
+    
+    #Preset our array of holograms
+    local Indexes = array()
+    
+    
+    #Scope Tube
+    local A_Index = HoloIndex
+    holoCreate(A_Index)
+    holoModel(A_Index,"hq_tube_thin")
+    holoAng(A_Index,ParentE:toWorld(ang(90,0,0)))
+    holoPos(A_Index,ParentE:toWorld(vec(2.5,0,0)))
+    holoParent(A_Index,Parent)
+    holoColor(A_Index,vec(0))
+    holoDisableShading(A_Index,1)
+    holoShadow(A_Index,0)
+    Indexes[1,normal] = A_Index
+    
+    #Scope Glass
+    local A_Index = A_Index+1
+    holoCreate(A_Index)
+    holoModel(A_Index,"models/sprops/misc/domes/size_3/dome_36x18.mdl")
+    holoAng(A_Index,ParentE:toWorld(ang(-90,0,0)))
+    holoPos(A_Index,ParentE:toWorld(vec(8.5,0,0)))
+    holoScale(A_Index,vec(0.33,0.33,0.01))
+    holoParent(A_Index,Parent)
+    holoMaterial(A_Index,"HUD/scope_sniper_ll")
+    holoDisableShading(A_Index,1)
+    holoShadow(A_Index,0)
+    Indexes[2,normal] = A_Index
+    
+    
+    #Return our array of holograms
+    return Indexes
+}
+
+
+#This function updates a previously created generic scope with new textures and colours to somthing more suitable for FLIR
+#input: ScopeHolos - Plug in the array that the generic scope generated
+#input: FLIRActive - Either 1 or 0
+function void ucGSFLIRUpdate(ScopeHolos:array,FLIRActive:normal)
+{
+    #Getting the ScopeTube and ScopeGlass from the ScopeHolos array, they should always be in this order
+    local ScopeTube = ScopeHolos[1,normal]
+    local ScopeGlass = ScopeHolos[2,normal]
+    
+    
+    #Updating the hologram's colours, materials, and alphas
+    #FLIR Active
+    if(FLIRActive)
+    {
+        holoMaterial(ScopeGlass,"holograms/hologram")
+        holoColor(ScopeGlass,vec(100))
+        holoAlpha(ScopeGlass,150)
+    }
+    
+    #FLIR Inactive
+    else
+    {
+        holoMaterial(ScopeGlass,"HUD/scope_sniper_ll")
+        holoColor(ScopeGlass,vec(255))
+        holoAlpha(ScopeGlass,255)
+    }
+}
+
+
+#This function creates a aimer for day time use
+#input: HoloIndex - This is the index the holograms will start spawning at, it will parent all holograms to the previous hologram
+#return: Returns an array of all holograms used
+function array ucCreateDayAimer(HoloIndex:normal)
+{
+    #Getting information to spawn the holograms
+    local Parent = HoloIndex-1
+    local ParentE = holoEntity(Parent)
+    
+    local Indexes = array()
+    
+    
+    #/////AIMING RETICLE\\\\\#
+    #Middle Reticle
+    local A_Index = HoloIndex
+    holoCreate(A_Index)
+    holoModel(A_Index,"cplane")
+    holoAng(A_Index,ParentE:toWorld(ang(0,0,0)))
+    holoPos(A_Index,ParentE:toWorld(vec(0,0,-2)))
+    holoScale(A_Index,vec(0.0030))
+    holoParent(A_Index,Parent)
+    holoColor(A_Index,UC_Red)
+    holoDisableShading(A_Index,1)
+    holoShadow(A_Index,0)
+    Indexes[1,normal] = A_Index
+    
+    #Left Line Thing
+    local A_Index = (A_Index + 1)
+    holoCreate(A_Index)
+    holoModel(A_Index,"plane")
+    holoAng(A_Index,ParentE:toWorld(ang(0,0,0)))
+    holoPos(A_Index,ParentE:toWorld(vec(0,0.5,-2))) #up/down left/right backwards/forwards
+    holoScale(A_Index,vec(0.0015,0.05,0.0015))
+    holoParent(A_Index,Parent)
+    holoColor(A_Index,UC_Red)
+    holoDisableShading(A_Index,1)
+    holoShadow(A_Index,0)
+    Indexes[2,normal] = A_Index
+    
+    #Right Line Thing
+    local A_Index = (A_Index + 1)
+    holoCreate(A_Index)
+    holoModel(A_Index,"plane")
+    holoAng(A_Index,ParentE:toWorld(ang(0,0,0)))
+    holoPos(A_Index,ParentE:toWorld(vec(0,-0.5,-2))) #up/down left/right backwards/forwards
+    holoScale(A_Index,vec(0.0015,0.05,0.0015))
+    holoParent(A_Index,Parent)
+    holoColor(A_Index,UC_Red)
+    holoDisableShading(A_Index,1)
+    holoShadow(A_Index,0)
+    Indexes[3,normal] = A_Index
+    
+    #Top Line Thing
+    local A_Index = (A_Index + 1)
+    holoCreate(A_Index)
+    holoModel(A_Index,"plane")
+    holoAng(A_Index,ParentE:toWorld(ang(0,0,0)))
+    holoPos(A_Index,ParentE:toWorld(vec(0.25,0,-2))) #up/down left/right backwards/forwards
+    holoScale(A_Index,vec(0.025,0.001,0.00))
+    holoParent(A_Index,Parent)
+    holoColor(A_Index,UC_Red)
+    holoDisableShading(A_Index,1)
+    holoShadow(A_Index,0)
+    Indexes[4,normal] = A_Index
+    
+    #Bottom Line Thing
+    local A_Index = (A_Index + 1)
+    holoCreate(A_Index)
+    holoModel(A_Index,"plane")
+    holoAng(A_Index,ParentE:toWorld(ang(0,0,0)))
+    holoPos(A_Index,ParentE:toWorld(vec(-0.2,0,-2))) #up/down left/right backwards/forwards
+    holoScale(A_Index,vec(0.02,0.001,0.00))
+    holoParent(A_Index,Parent)
+    holoColor(A_Index,UC_Red)
+    holoDisableShading(A_Index,1)
+    holoShadow(A_Index,0)
+    Indexes[5,normal] = A_Index
+    
+    
+    #/////RANGE NUMBERS\\\\\#
+    #Left Range Digit
+    local A_Index = (A_Index + 1)
+    holoCreate(A_Index)
+    holoModel(A_Index,"models/sprops/misc/alphanum/alphanum_0.mdl")
+    holoAng(A_Index,ParentE:toWorld(ang(0,90,90)))
+    holoPos(A_Index,ParentE:toWorld(vec(-0.5,0.2,-2))) #up/down left/right backwards/forwards
+    holoScale(A_Index,vec(0.02))
+    holoParent(A_Index,Parent)
+    holoMaterial(A_Index,"holograms/hologram")
+    holoColor(A_Index,UC_Green)
+    holoDisableShading(A_Index,1)
+    holoShadow(A_Index,0)
+    holoBodygroup(A_Index,0,3)
+    Indexes[6,normal] = A_Index
+    
+    #Middle Range Digit
+    local A_Index = (A_Index + 1)
+    holoCreate(A_Index)
+    holoModel(A_Index,"models/sprops/misc/alphanum/alphanum_0.mdl")
+    holoAng(A_Index,ParentE:toWorld(ang(0,90,90)))
+    holoPos(A_Index,ParentE:toWorld(vec(-0.5,0,-2))) #up/down left/right backwards/forwards
+    holoScale(A_Index,vec(0.02))
+    holoParent(A_Index,Parent)
+    holoMaterial(A_Index,"holograms/hologram")
+    holoColor(A_Index,UC_Green)
+    holoDisableShading(A_Index,1)
+    holoShadow(A_Index,0)
+    holoBodygroup(A_Index,0,3)
+    Indexes[7,normal] = A_Index
+    
+    #Right Range Digit
+    local A_Index = (A_Index + 1)
+    holoCreate(A_Index)
+    holoModel(A_Index,"models/sprops/misc/alphanum/alphanum_0.mdl")
+    holoAng(A_Index,ParentE:toWorld(ang(0,90,90)))
+    holoPos(A_Index,ParentE:toWorld(vec(-0.5,-0.2,-2))) #up/down left/right backwards/forwards
+    holoScale(A_Index,vec(0.02))
+    holoParent(A_Index,Parent)
+    holoMaterial(A_Index,"holograms/hologram")
+    holoColor(A_Index,UC_Green)
+    holoDisableShading(A_Index,1)
+    holoShadow(A_Index,0)
+    holoBodygroup(A_Index,0,3)
+    Indexes[8,normal] = A_Index
+    
+    
+    
+    #/////INDICATORS\\\\\#
+    #Objective Indicator
+    local A_Index = (A_Index + 1)
+    holoCreate(A_Index)
+    holoModel(A_Index,"models/sprops/misc/alphanum/alphanum_arrow_b.mdl")
+    holoAng(A_Index,ParentE:toWorld(ang(0,90,90)))
+    holoPos(A_Index,ParentE:toWorld(vec(-0.5,0.5,-2))) #up/down left/right backwards/forwards
+    holoScale(A_Index,vec(0.02))
+    holoParent(A_Index,Parent)
+    holoMaterial(A_Index,"holograms/hologram")
+    holoColor(A_Index,UC_Neutral)
+    holoDisableShading(A_Index,1)
+    holoShadow(A_Index,0)
+    Indexes[9,normal] = A_Index
+    
+    #Readiness Indicator
+    local A_Index = (A_Index + 1)
+    holoCreate(A_Index)
+    holoModel(A_Index,"models/sprops/misc/alphanum/alphanum_trade.mdl")
+    holoAng(A_Index,ParentE:toWorld(ang(0,90,90)))
+    holoPos(A_Index,ParentE:toWorld(vec(-0.5,-0.5,-2))) #up/down left/right backwards/forwards
+    holoScale(A_Index,vec(0.02))
+    holoParent(A_Index,Parent)
+    holoMaterial(A_Index,"holograms/hologram")
+    holoColor(A_Index,UC_Neutral)
+    holoDisableShading(A_Index,1)
+    holoShadow(A_Index,0)
+    Indexes[10,normal] = A_Index
+    
+    return Indexes
+}
+
+
+#This function updates the colour for the objective indicator
+#input: AimerHolos - The array outputted by ucCreateDayAimer
+#input: SCRLData   - The array outputted from SCRL when you recieve a transmission
+function void ucUpdateObjectiveIndicatorCol(AimerHolos:array,SCRLData:array)
+{
+    #/////SCRL DATA\\\\\#
+    #Get the order from the SCRLData array
+    local Order = SCRLData[1,string]
+    
+    #Using Order, we search a precompiled table to get the colour
+    local Color = UC_Col[Order,table]["color",vector]
+    
+    
+    #/////HOLOGRAM MANIPULATION\\\\\#
+    #Get the Objective Indicator's holo index
+    local ObjInd = AimerHolos[9,normal]
+    
+    #Set the Objective Indicator's colour
+    holoColor(ObjInd,Color)
+}
+
+
+#This function updates the colour for the Readiness Indicator
+#input: AimerHolos - The array outputted by ucCreateDayAimer
+#input: SCRLData   - Wether the gun is ready or not 
+function void ucUpdateReadinessIndicator(AimerHolos:array,GunReady:normal)
+{
+    #/////GETTING THE COLOR\\\\\#
+    #Get the color
+    local Color = (UC_Red*GunReady)+(UC_Neutral*!GunReady)
+    
+    
+    #/////HOLOGRAM MANIPULATION\\\\\#
+    #Get the Gun Readiness Indicator
+    local ReaInd = AimerHolos[10,normal]
+    
+    #Set the Readiness Indicator's Color
+    holoColor(ReaInd,Color)
+}
+
+
+#This function will remove all holograms related to the day or FLIR aimers
+#input: AimerStartIndex - The starting index the aimer holograms spawned at
+function void ucCleanupAimer(AimerStartIndex:normal)
+{
+    for(N=1,10) {holoDelete(AimerStartIndex+N)}
+}
+
+
+#This function create a night vision aimer
+#input: HoloIndex - The index that the holograms will start spawning at
+#return: Returns an array of holograms that the function has spawned
+function array ucCreateNVAimer(HoloIndex:normal)
+{
+    #Getting information to spawn the holograms
+    local Parent = HoloIndex-1
+    local ParentE = holoEntity(Parent)
+    
+    local Indexes = array()
+    
+    
+    #/////AIMING RETICLE\\\\\#
+    #Middle Reticle
+    local A_Index = HoloIndex
+    holoCreate(A_Index)
+    holoModel(A_Index,"hq_stube")
+    holoAng(A_Index,ParentE:toWorld(ang(0,0,0)))
+    holoPos(A_Index,ParentE:toWorld(vec(0,0,-2)))
+    holoScale(A_Index,vec(0.0050))
+    holoParent(A_Index,Parent)
+    holoColor(A_Index,UC_Red)
+    holoDisableShading(A_Index,1)
+    holoShadow(A_Index,0)
+    Indexes[1,normal] = A_Index
+    
+    #Middle Line Thing
+    local A_Index = (A_Index + 1)
+    holoCreate(A_Index)
+    holoModel(A_Index,"plane")
+    holoAng(A_Index,ParentE:toWorld(ang(0,0,0)))
+    holoPos(A_Index,ParentE:toWorld(vec(0,0,-2))) #up/down left/right backwards/forwards
+    holoScale(A_Index,vec(0.08,0.001,0.001))
+    holoParent(A_Index,Parent)
+    holoColor(A_Index,UC_Red)
+    holoDisableShading(A_Index,1)
+    holoShadow(A_Index,0)
+    Indexes[2,normal] = A_Index
+    
+    #Left Line Thing
+    local A_Index = (A_Index + 1)
+    holoCreate(A_Index)
+    holoModel(A_Index,"plane")
+    holoAng(A_Index,ParentE:toWorld(ang(0,0,0)))
+    holoPos(A_Index,ParentE:toWorld(vec(0,0.35,-2))) #up/down left/right backwards/forwards
+    holoScale(A_Index,vec(0.0015,0.05,0.0015))
+    holoParent(A_Index,Parent)
+    holoColor(A_Index,UC_Red)
+    holoDisableShading(A_Index,1)
+    holoShadow(A_Index,0)
+    Indexes[3,normal] = A_Index
+    
+    #Right Line Thing
+    local A_Index = (A_Index + 1)
+    holoCreate(A_Index)
+    holoModel(A_Index,"plane")
+    holoAng(A_Index,ParentE:toWorld(ang(0,0,0)))
+    holoPos(A_Index,ParentE:toWorld(vec(0,-0.35,-2))) #up/down left/right backwards/forwards
+    holoScale(A_Index,vec(0.0015,0.05,0.0015))
+    holoParent(A_Index,Parent)
+    holoColor(A_Index,UC_Red)
+    holoDisableShading(A_Index,1)
+    holoShadow(A_Index,0)
+    Indexes[4,normal] = A_Index
+    return Indexes
+}
+
+
+
+function number ucRadarRange(StartHolo:normal,AimPos:vector,LastRange:normal)
+{
+    local StartHoloE = holoEntity(StartHolo)
+    local Dir = (AimPos-StartHoloE:pos()):normalized()
+    
+    #local LastRangeUnits = LastRange*39.37
+    
+    local LastRangeUnits = 0
+    
+    local Size = UC_RadarRangeRatio * LastRangeUnits
+    
+    local TraceStartPos = StartHoloE:pos() + (Dir * 30)
+    
+    local Trace = rangerOffsetHull(UC_RadarRangeLength,TraceStartPos,Dir,vec(Size))
+    
+    if(Trace:entity())
+    {
+        return round(((Trace:position() - StartHoloE:pos()):length() + (Size / 2))/39.37)
+    }
+    else
+    {
+        return LastRange
+    }
+}
+#Tell the user that they're just doing it wrong
+if(entity():getName() == "Renbary")
+{
+    print("Renbary is useless alone, you have to use it as an imported library.")
+}

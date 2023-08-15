@@ -1,0 +1,157 @@
+@name renMap
+@inputs [MSGBUS]:table [Screen]:wirelink #Generic Inputs
+@persist [MAP_HIGH_FREQUENCY MAP_LOW_FREQUENCY]:number #Frequencies
+@persist [Cam_Off]:number [Gunner]:entity [Position]:vector #MSGBUS Inputs
+@persist [Map_Point]:vector #MSGBUS Outputs
+@persist [Pointer]:vector2 #"Runtime" Variables
+@persist [MAPCUTOFF]:number [VERSION]:string #Global Variables
+@trigger [MSGBUS]
+@model models/props_lab/powerbox03a.mdl
+#[
+E2 By:
+    Renco - Making it work
+    Red - Fancier code for moving map around, GTMP, MSGBUS
+
+!!!!!
+DO-NOT RE-DISTRIBUTE!
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+Simple implementation of GTMP for use with my ren system
+Outputs the selected map point to the bus for indirect fire
+
+
+
+//////////VERSION LOG\\\\\\\\\\
+V0.0.0 (10-29-20) - Initial Development
+V1.0.0 (10-29-20) - Functionally Complete
+V1.0.1 (12-28-20)
+    [UPDATED] Implemented vehicle and typing checks for gunner input(s)
+V1.0.2 (01-04-20)
+    [ADDED] Added low frequency mode after 35s
+
+
+
+//////////TO-DO\\\\\\\\\\
+
+/////DONE\\\\\
+
+
+
+//////////MSGBUS\\\\\\\\\\
+/////MSGBUS INPUTS\\\\\
+GUNNER   [ENTITY] - Gunner controlling map
+CAM_OFF  [NUMBER] - Enables map controls
+POSITION [VECTOR] - Our position
+
+/////MSGBUS OUTPUTS\\\\\
+MAP_POINT [VECTOR] - Position from map
+]#
+
+
+#//////////INITIALIZATION\\\\\\\\\\#
+#Reset the E2 if we have been duped or the dupe has finished spawning
+if(duped()|dupefinished()) {reset()}
+
+#Helping you shoot things you can't see since 2020
+if(first())
+{
+    #/////LIBRARIES\\\\\#
+    #include "GTMP3_Lib"
+    #include "renKeyLib"
+
+
+
+    #/////INITIALIZE VARIABLES\\\\\#
+    #//FREQUENCIES\\#
+    MAP_HIGH_FREQUENCY = 100 #Default: 100
+    MAP_LOW_FREQUENCY = 250 #Default: 200
+
+
+
+    #/////FUNCTIONS\\\\\#
+    #[Grabs things from the MSGBUS
+    ]#
+    function void msgBusIn()
+    {
+        if(->MSGBUS)
+        {
+            Gunner   = MSGBUS["GUNNER",entity]
+            Cam_Off  = MSGBUS["CAM_OFF",number]
+            Position = MSGBUS["POSITION",vector]
+        }
+    }
+
+    #[Updates the MSGBUS with new data
+    ]#
+    function void msgBusOut()
+    {
+        if(->MSGBUS)
+        {
+            MSGBUS["MAP_POINT",vector] = Map_Point
+        }
+    }
+
+
+
+    #/////FINALIZE\\\\\#
+    #//TIMERS\\#
+    #Starts the timer if somthing is wired to Screen
+    if(->Screen) {timer("map_update",MAP_LOW_FREQUENCY) timer("map_cutoff",35000)}
+
+
+    #//VERSION\\#
+    VERSION = "V1.0.2"
+    setName("renMap "+VERSION)
+
+
+    #//MSGBUS\\#
+    #Push the name of this E2 to the bus
+    MSGBUS["NODE_NAMES",array]:pushString(entity():getName())
+
+    #Update bus.
+    msgBusIn()
+    msgBusOut()
+}
+
+
+
+#//////////UPDATE MSGBUS\\\\\\\\\\#
+elseif(inputClk())
+{
+    msgBusIn()
+}
+
+
+
+#//////////MAIN CODE\\\\\\\\\\#
+elseif(clk("map_update"))
+{
+    timer("map_update",MAPCUTOFF ? MAP_HIGH_FREQUENCY : MAP_LOW_FREQUENCY)
+
+    #Write to our screen
+    Screen:gtmp(1,0,0)
+
+    #Track our coordinates
+    gtmp_trackCoordinate(50,Position)
+
+    #Moves around the point if the camera is off, also outputs to the bus
+    if(Cam_Off&Gunner:vehicle()&(!Gunner:isTyping()))
+    {
+        local PointerSpeed =  0.01 + (Gunner:keyPressed(RenKL_KEYS["MAP_SPEED",string]) * 0.03)
+        Pointer = clamp(Pointer + vec2(Gunner:keyPressed(RenKL_KEYS["MAP_UP",string]) - Gunner:keyPressed(RenKL_KEYS["MAP_DOWN",string])
+        ,Gunner:keyPressed(RenKL_KEYS["MAP_LEFT",string]) - Gunner:keyPressed(RenKL_KEYS["MAP_RIGHT",string])) * PointerSpeed,vec2(-1),vec2(1))
+
+        #Have GTMP tell us the position we're pointing at
+        Map_Point = gtmp_plotProportion(10,Pointer)
+
+        #Update the busss
+        msgBusOut()
+    }
+}
+
+
+
+elseif(clk("map_cutoff")) {MAPCUTOFF = 1}

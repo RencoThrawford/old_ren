@@ -1,0 +1,423 @@
+@name renSpectre
+@inputs [MSGBUS]:table #Generic Inputs
+@inputs [Entities1 Position1 Velocity1 Entities2 Position2 Velocity2 Entities3 Position3 Velocity3 Entities4 Position4 Velocity4]:array #Radar Inputs
+@outputs [Active Smoke Flares Chaff Detonate]:number [GuidancePos]:vector #Generic Outputs
+@persist [RADAR_FREQUENCY ALERT_FREQUENCY IDLE_FREQUENCY]:number [ANTIRADAR_TICK]:number #Frequencies
+@persist [Gunner]:entity [Aimpos Position Target_Speed]:vector #MSGBUS Inputs
+@persist [Alert_Level]:number [Counter_Target Counter_Speed]:vector [Threat_Data Radar_Data]:array #MSGBUS Outputs
+@persist [Saftey FireAndForget GuidanceMode ManualDeploy GuidanceState]:number [GuidedMissile]:entity [Hitpos GuidedMissilePos]:vector [Positions Velocities]:array #"Runtime" Variables
+@persist [VERSION]:string [ACTIVATIONS GUIDANCEMODES]:array [MISSILEDATA GUIDANCEDATA]:table #Global Variables
+@persist [SPEED_WEIGHT DIST_WEIGHT WEIGHT_WEIGHT CIWS_MINDIST GUIDE_MINDIST]:number [WARN_HEADING GUIDE_HEADING]:angle #User Settings
+@trigger [MSGBUS]
+@model models/props_lab/reciever01b.mdl
+runOnKeys(Gunner,1)
+#[
+E2 By:
+    Renco - Nearly everything
+    Red - MSGBUS, Some other things
+
+!!!!!
+REALLY DO-NOT RE-DISTRIBUTE!
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+Detects and assigns missile threats
+
+
+
+//////////VERSION LOG\\\\\\\\\\
+V0.0.0 (01-05-21) - Initial Development
+V1.0.0 (01-05-21)
+    [ADDED] Added basic threat detection
+    [ADDED] Added basic guidance modes
+V1.0.1 (01-24-21)
+    [FIXED] Fixed target weighting not functioning properly
+
+
+
+//////////TO-DO\\\\\\\\\\
+
+/////DONE\\\\\
+
+
+
+//////////MSGBUS\\\\\\\\\\
+/////MSGBUS INPUTS\\\\\
+AIMPOS   [VECTOR3] - Aimpos
+GUNNER   [ENTITY]  - Gunner aiming at target
+POSITION [VECTOR3] - Current position
+TARGET_SPEED [VECTOR3] - Velocity of the target
+
+////MSGBUS OUTPUTS\\\\\
+ALERT_LEVEL    [NUMBER] - Alert level of system
+THREAT_DATA    [ARRAY] - Processed threat data of missiles
+COUNTER_TARGET [VECTOR3] - Target location to attempt CIWS against
+COUNTER_SPEED  [VECTOR3] - Target speed to attempt CIWS against
+RADAR_DATA     [ARRAY] - Raw radar data
+]#
+
+
+#//////////INITIALIZATION\\\\\\\\\#
+#Reset the E2 if we have been duped or the dupe has finished spawning
+if(duped()|dupefinished()) {reset()}
+
+#Don't start the countdown to zero
+if(first())
+{
+    #/////SETTINGS\\\\\#
+    #//CIWS SETTINGS\\#
+    #Weights, set them high to prioritze that charctaristic, set negetive to penalize
+    #Target priorization for weight
+    SPEED_WEIGHT = -1 #Default: -2
+
+    #Target priotization for distance
+    DIST_WEIGHT = -2 #Default: -4
+
+    #Target prioritization for weight/mass
+    WEIGHT_WEIGHT = -5 #Default: 1.15
+
+    #Miniumum distance to engage
+    CIWS_MINDIST = 250 #Default: 250
+
+
+    #//THREAT DETECTION\\#
+    #Minimum heading the missile must be heading twords us to set off countermeasures and such
+    WARN_HEADING = ang(50,15,0) #Default: ang(15)
+    
+    
+    #//GUIDABLE MISSILE DETECTION\\#
+    #Minimum heading the missile must be heading twords hitpos to start guidance
+    GUIDE_HEADING = ang(10) #Default: ang(10)
+
+    #Minimum distance from us to begin guidance
+    GUIDE_MINDIST = 200 #Default: 200
+
+
+
+    #/////LIBRARIES\\\\\#
+    #include "renKeyLib"
+
+
+
+    #/////INITIALIZE VARIABLES\\\\\#
+    #//FREQUENCIES\\#
+    RADAR_FREQUENCY = 50 #Default: 50
+    ALERT_FREQUENCY = 75 #Default: 75
+    IDLE_FREQUENCY = 100 #Default: 100
+    ANTIRADAR_TICK = 5000 #Default: 5000
+
+
+    #//GLOBAL VARIABLES\\#
+    ACTIVATIONS[0,string] = "off"
+    ACTIVATIONS[1,string] = "on"
+    GUIDANCEMODES = array("direct","top-attack","anti-air")
+
+    #Missile data: array(guidance type(s), missile designation/name, missile role?)
+    #Use a comma to separate multiple things such as guidance modes, and missile roles
+    MISSILEDATA = table()
+    #Air-to-Air
+    MISSILEDATA["models/missiles/aim9m.mdl",array] = array("infrared","AIM-9","A2A")
+    MISSILEDATA["models/missiles/aim120c.mdl",array] = array("radar","AIM-120","A2A")
+    MISSILEDATA["models/missiles/aim54.mdl",array] = array("radar","AIM-54","A2A")
+    #Artillery Rockets
+    MISSILEDATA["models/missiles/glatgm/mgm51.mdl",array] = array("laser","Type 63","AR")
+    MISSILEDATA["models/missiles/9m31.mdl",array] = array("laser","SAKR-10","AR")
+    #Air-to-Surface
+    MISSILEDATA["models/missiles/aim9.mdl",array] = array("infrared","AGM-122","A2S")
+    MISSILEDATA["models/missiles/9m120.mdl",array] = array("laser","9M120","A2S")
+    MISSILEDATA["models/missiles/at3.mdl",array] = array("wire","AT-3","A2S")
+    MISSILEDATA["models/missiles/bgm_71e.mdl",array] = array("wire","BGM-71E","A2S")
+    MISSILEDATA["models/kali/weapons/kornet/parts/9m133 kornet missile.mdl",array] = array("laser","9M113","A2S")
+    MISSILEDATA["models/missiles/agm_114.mdl",array] = array("laser","AGM-114","A2S")
+    MISSILEDATA["models/missiles/at2.mdl",array] = array("laser,wire","AT-2","A2S")
+    #Surface-to-Air
+    MISSILEDATA["models/missiles/fim_92.mdl",array] = array("infrared,antimissile","FIM-92","S2A")
+    MISSILEDATA["models/missiles/9m31.mdl",array] = array("infrared,antimissile","9M31","S2A")
+    #Multi-Model
+    MISSILEDATA["models/missiles/aim120.mdl",array] = array("laser,infrared","SS-40,AGM-45","AR,A2S")
+
+    #Guidance data: array(dist above hitpos, dist to guidance pos to begin dive)
+    #Configure to atleast be able to hit with level combat
+    GUIDANCEDATA = table()
+    #Air-to-Surface
+    GUIDANCEDATA["models/missiles/agm_114.mdl",array] = array(2000,8000)
+    GUIDANCEDATA["models/missiles/at2.mdl",array] = array(2000,3000)
+    #Multi-Model
+    GUIDANCEDATA["models/missiles/aim120.mdl",array] = array(6500,1700)
+
+
+    #//"RUNTIME" VARIABLES\\#
+    GuidanceMode = 1
+
+
+
+    #/////FUNCTIONS\\\\\#
+    #//MSGBUS\\#
+    #[Grab things from the bus
+    ]#
+    function void msgBusIn()
+    {
+        if(->MSGBUS)
+        {
+            Aimpos = MSGBUS["AIMPOS",vector]
+            Gunner = MSGBUS["GUNNER",entity]
+            Position = MSGBUS["POSITION",vector]
+            Target_Speed = MSGBUS["TARGET_SPEED",vector]
+        }
+    }
+
+    #[Push things out to the bus
+    ]#
+    function void msgBusOut()
+    {
+        if(->MSGBUS)
+        {
+            MSGBUS["ALERT_LEVEL",number] = Alert_Level
+            MSGBUS["THREAT_DATA",array]  = Threat_Data
+            MSGBUS["COUNTER_TARGET",vector] = Counter_Target
+            MSGBUS["COUNTER_SPEED",vector] = Counter_Speed
+            MSGBUS["RADAR_DATA",array] = Radar_Data
+        }
+    }
+
+
+    #//MISC\\#
+    #[Notifies whoever is gunning of a message
+    Inputs:
+        Message [STRING] - Message to be notified with
+    ]#
+    function void gunnerNotify(Message:string)
+    {
+        Gunner:vehicle():hintDriver("[renSpectre] "+Message,5.5)
+    }
+
+
+
+    #/////FINALIZE\\\\\#
+    timer("radar",RADAR_FREQUENCY)
+    timer("search",IDLE_FREQUENCY)
+    
+    #//VERSION\\#
+    VERSION = "V1.0.1"
+    setName("renSpectre "+VERSION)
+
+    #//FINALIZE MSGBUS\\#
+    #Push the name of this E2 to the bus
+    MSGBUS["NODE_NAMES",array]:pushString(entity():getName())
+}
+
+
+
+elseif(inputClk())
+{
+    msgBusIn()
+
+    if(changed(Gunner)&Gunner) {Active = 1}
+}
+
+
+
+elseif(keyClk(Gunner))
+{
+    if((!Gunner:isTyping())&Gunner:vehicle())
+    {
+        local Key = keyClkPressed()
+        local Pressed = Gunner:keyPressed(Key)
+        
+        switch(Key)
+        {
+            case RenKL_KEYS["SAFTEY",string],
+                Saftey = Pressed
+            break
+            
+            case RenKL_KEYS["GUIDANCE_SWITCH",string],
+                if(Pressed)
+                {
+                    if(Saftey)
+                    {
+                        FireAndForget = !FireAndForget
+                        gunnerNotify("Fire and forget turned "+ACTIVATIONS[FireAndForget,string]+".")
+                        soundPlay("guidance_switch",1.5,"acf_mikespack_two/combat/optic/us_optic_switch.wav")
+                    }
+                    else
+                    {
+                        if(inrange(GuidanceMode+1,1,3)) {GuidanceMode++} else{GuidanceMode = 1}
+                        gunnerNotify("Guidance mode now "+GUIDANCEMODES[GuidanceMode,string]+".")
+                        soundPlay("guidance_switch",1.5,"acf_mikespack_two/combat/optic/ru_optic_switch.wav")
+                    }
+                }
+            break
+            
+            case RenKL_KEYS["DEPLOY_COUNTER",string],
+                ManualDeploy = Pressed
+            break
+            
+            default,
+                if(FireAndForget)
+                {
+                    if(Gunner:keyAttack1()) {Hitpos = Aimpos}
+                }
+            break
+        }
+    }
+}
+
+
+
+elseif(clk("radar"))
+{
+    timer("radar",RADAR_FREQUENCY)
+
+    Radar_Data = Entities1:add(Entities2):add(Entities3):add(Entities4)
+    Positions  = Position1:add(Position2):add(Position3):add(Position4)
+    Velocities = Velocity1:add(Velocity2):add(Velocity3):add(Velocity4)
+
+    msgBusOut()
+}
+
+
+
+elseif(clk("search"))
+{
+    timer("search",Alert_Level ? ALERT_FREQUENCY : IDLE_FREQUENCY)
+
+    if(!(->MSGBUS)) {Position = entity():pos()}
+    Alert_Level = 0
+    local Smoking = 0
+    local Flaring = 0
+    local Radaring = 0
+    local Antiradaring = 0
+    local ThreatWeights = array()
+
+    for(K=1,Radar_Data:count())
+    {
+        local Missile = Radar_Data[K,entity]
+        local MissileVel = Velocities[K,vector]
+
+        if(Missile:isValid()&(MissileVel:length()>5))
+        {
+            local MissileDist = Positions[K,vector]:distance(Position)
+
+            local GuidanceType = MISSILEDATA[Missile:model(),array][1,string]:explode(",")
+
+            if(inrange(Missile:heading(Position),-WARN_HEADING,WARN_HEADING))
+            {
+                Alert_Level++
+
+                if(MissileDist>CIWS_MINDIST)
+                {
+                    ThreatWeights[K,number] = (Velocities[K,vector]:length()*SPEED_WEIGHT)+(MissileDist*DIST_WEIGHT)+(Radar_Data[K,entity]:mass()*WEIGHT_WEIGHT)
+                }
+
+                foreach(K,GT:string = GuidanceType)
+                {
+                    if(((GT == "wire")|(GT == "laser"))) {Smoking++}
+                    if((GT == "infrared")&(!Flaring)) {Flaring++}
+                    if(GT == "radar") {Radaring++}
+                    if(GT == "antiradiation") {Antiradaring++} #oh wait its pointless :<
+                }
+            }
+
+            elseif(!GuidedMissile)
+            {
+                if((MissileDist < GUIDE_MINDIST)&inrange(Missile:heading(GuidancePos),-GUIDE_HEADING,GUIDE_HEADING))
+                {
+                    local Guidable = 0
+                    foreach(I,GT:string = GuidanceType) {if(((GT == "wire")|(GT == "laser"))) {Guidable++}}
+
+                    if(Guidable)
+                    {
+                        GuidedMissile = Missile
+                        GuidedMissilePos = Missile:boxCenterW()
+                        #GuidedMissile:createWire(entity(),"Detonate","Detonate")
+                        soundPlay("guidance",0,"acf_extra/airfx/radar_track.wav")
+                        soundVolume("guidance",0.4)
+                    }
+                }
+            }
+        }
+
+        else
+        {
+            Radar_Data:removeEntity(K) Positions:removeVector(K) Velocities:removeVector(K)
+        }
+    }
+
+    if(ThreatWeights:count())
+    {
+        local BiggestThreatIndex = ThreatWeights:maxIndex()
+        Counter_Target = Radar_Data[BiggestThreatIndex,entity]:boxCenterW()
+        Counter_Speed = Velocities[BiggestThreatIndex,vector]
+    }
+    else
+    {
+        Counter_Target=Counter_Speed = vec(0)
+    }
+
+    if(ManualDeploy) {Smoke=Flares=Chaff = ManualDeploy}
+    else
+    {
+        Smoke = Smoking
+        Flares = Flaring
+        Chaff = Radaring
+        if(Antiradaring) {Active = 0 timer("blackout",ANTIRADAR_TICK)}
+    }
+
+    if((!FireAndForget)|Gunner:keyAttack1()) {Hitpos = Aimpos}
+
+    if(GuidedMissile)
+    {
+        GuidedMissilePos = GuidedMissile:boxCenterW()
+
+        switch(GuidanceMode)
+        {
+            case 1,
+                GuidancePos = Hitpos
+            break
+
+            case 2,
+                if(GUIDANCEDATA:exists(GuidedMissile:model()))
+                {
+                    local GuidanceDist = GuidedMissilePos:distance(GuidancePos)
+                    local CurData = GUIDANCEDATA[GuidedMissile:model(),array]
+    
+                    if(GuidanceState)
+                    {
+                        GuidancePos = Hitpos
+                    }
+    
+                    else
+                    {
+                        GuidancePos = Hitpos+vec(0,0,CurData[1,number])
+
+                        if(GuidanceDist <= CurData[2,number]) {GuidanceState++}
+                    }
+                }
+                else
+                {
+                    GuidancePos = Hitpos
+                }
+            break
+
+            case 3,
+                local Dist = ((GuidedMissilePos - Hitpos):setZ(0):length())/39.37
+                local GuidedMissileVel = ($GuidedMissilePos):length()/39.37
+                local TravelTime = (Dist/GuidedMissileVel)*2 #162.5 25 150  
+                GuidancePos = (Aimpos + (Target_Speed * tickInterval()) + (Target_Speed * TravelTime))
+                Detonate = Dist < 5
+            break
+        }
+    }
+    else
+    {
+        GuidanceState=Detonate = 0
+        GuidancePos = Hitpos
+        soundStop("guidance")
+    }
+}
+
+
+
+elseif(clk("blackout")) {Active = 1}

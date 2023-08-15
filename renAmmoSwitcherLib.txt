@@ -1,0 +1,234 @@
+@name renAmmoSwitcherLib
+@persist [RenASL_CaliberRange]:vector2 [RenASL_TypesShort RenASL_TypesLong]:array
+@persist [RenASL_VERSION]:string [RenASL_AMMOS RenASL_SELECTABLE]:table
+@autoupdate on
+#[
+E2 Library By:
+    Renco - Everything
+
+
+
+//////////NOTES\\\\\\\\\\
+This library allows you to switch between several different ammunition types
+Now featuring per-gun ammunition selection!
+
+table entity:renASLBuild() output structure
+    [AMMOTYPE,array]; AP, APCR, etc.
+        [INDEX,entity]; Entity of the ammo crate, these are just pushed into the array
+
+Internal ammos table structure
+    [GUNINDEX,table]; Index is a number
+        [AMMOTYPE,array]; Same as last
+            [INDEX,entity]; Same as last
+
+
+array table:renASLSelectable() output structure
+    [AMMOINDEX,string]; Short name of the munition, these should be in order according to RenASL_TypesShort, starting from 1
+
+Internal selectable ammos table structure
+    [GUNINDEX,array]; Index is a number
+        [AMMOINDEX,string]; Same as last
+
+
+
+//////////VERSION LOG\\\\\\\\\
+V0.0.0 (10-26-20) - Initial Devloplment
+V1.0.0 (10-26-20) - Functionally Complete
+V1.0.1 (10-28-20) - [ADDED] Version string
+V2.0.0 (12-07-20) -
+    [REMOVED] Old functions
+    [ADDED] entity:renASLHint(string); Notifies the owner or someone in a vehicle of a message
+    [ADDED] array:renASLActive(number); Sets an array of acf things (ammo crates) to the desired active number
+    [ADDED] table entity:renASLBuild(); Creates a table of all linked ammunitions of a gun
+    [ADDED] array table:renASLSelectable(); Creates an array of selectable ammunitions in order, automatically enables the first available
+    [ADDED] array:renASLBuild(); Updates internal table of ammuntions of an array of guns
+    [ADDED] array:renASLNotify(entity); Notifies someone of available ammuntions in an array
+    [ADDED] number:renASLNotify(entity); Notifies someone of available ammunitions from the selected gun, used with internal table
+    [ADDED] table:renASLSelect(number,array,entity); Activates selected ammuntiion, deactivated unselected ammunition
+    [ADDED] renASLSelect(number,number,entity); Same as last, used with internal table
+
+
+
+
+//////////TO-DO\\\\\\\\\\
+-Maybe also add a check to see if a crate is wired to anything when building
+-Maybe use the shift key for more numbers?
+Figure out how the acf devs fucked up this library
+
+/////DONE\\\\\#
+Only build arrays for ammo types we have available so you can 
+Per weapon selection?
+]#
+
+
+#//////////VARIABLES\\\\\\\\\#
+#"Short" and "Long" names of each ammunition type, for whatever use you may have
+RenASL_TypesShort = array("AP","APCR","APDS","APFSDS","APHE","HEAT","HEATFS","HE","GLATGM","FL","HP","SM") #If only we had more numbers
+RenASL_TypesLong  = array("Armor-Piercing","Armor-Piercing Composite Rigid","Armor-Piercing Discarding Sabot","Armor-Piercing Fin-Stabilized Discarding Sabot","Armor-Piercing High-Explosive","High-Explosive","High-Explosive Antitank","High-Explosive Antitank Fin-Stabilized","Gun Launched Anti-Tank Missile","Flechette","Smoke","Hollow-Point")
+#RenASL_TypesShort = array("AP","APHE","HE","HEAT","GLATGM","FL","SM","HP")
+#RenASL_TypesLong  = array("Armor-Piercing","Armor-Piercing High-Explosive","High-Explosive","High-Explosive Antitank","Gun Launched Anti-Tank Missile","Flechette","Smoke","Hollow-Point")
+RenASL_AMMOS = table()
+
+RenASL_VERSION = "V2.0.0"
+
+
+
+#//////////FUNCTIONS\\\\\\\\\\#
+#[Notifies someone (A player in a vehicle, a vehicle, or the owner)
+Inputs:
+    [ENTITY] - Someone or somthing to send a hint to
+    Message [STRING] - The message that will be hinted
+]#
+function void entity:renASLHint(Message:string)
+{
+    if(This:isPlayer()) {This:vehicle():hintDriver("[renASL] "+Message,5.5)}
+    elseif(This:isVehicle()) {This:hintDriver("[renASL] "+Message,5.5)}
+    else{hint("[renASL] "+Message,5.5)}
+}
+
+#[Sets the activeness of an array of acf entities to the desired activeness
+Inputs:
+    [ARRAY] - Array of ACF entities
+    Active [NUMBER] - 1 or 0
+]#
+function void array:renASLActive(Active:number)
+{
+    foreach(X,E:entity = This) {E:acfActive(Active)}
+}
+
+#[Builds a table of linked ammunitions given a gun entity
+Inputs:
+    [ENTITY] - The gun the table will be built for
+Return:
+    [TABLE] - Table of linked ammuntions, see notes for more details
+]#
+function table entity:renASLBuild()
+{
+    local Return = table()
+
+    local Links = This:acfLinks()
+
+    foreach(X,E:entity = Links)
+    {
+        if(E:acfIsAmmo())
+        {
+            local ShellType = E:acfAmmoType()
+            
+            if(!Return[ShellType,array]:count()) {Return[ShellType,array] = array()}
+
+            Return[ShellType,array]:unshiftEntity(E)
+
+            E:acfActive(0)
+        }
+    }
+
+    return Return
+}
+
+#[Returns an array of selectable ammunitions in order, see RenASL_TypesShort to view or adjust the order
+Automatically enables the first available ammunition type
+Inputs:
+    [TABLE] - The table generated by renASLBuild()
+Return:
+    [ARRAY] - Selectable ammunitions in order
+]#
+function array table:renASLSelectable()
+{
+    local Return = array()
+
+    if(This:count())
+    {
+        foreach(T,S:string = RenASL_TypesShort)
+        {
+            if(This:exists(S)) {Return:pushString(S)}
+        }
+
+        This[Return[1,string],array]:renASLActive(1)
+    }
+    return Return
+}
+
+#[Updates built-in table of ammunitions and selectable ammunitions
+Inputs:
+    [ARRAY] - An array of guns the table will build for
+]#
+function void array:renASLBuild()
+{
+    for(I=1,This:count())
+    {
+        RenASL_AMMOS[I,table] = table()
+        RenASL_AMMOS[I,table] = This[I,entity]:renASLBuild()
+        RenASL_SELECTABLE[I,array] = array()
+        RenASL_SELECTABLE[I,array] = RenASL_AMMOS[I,table]:renASLSelectable()
+    }
+}
+
+#[Notifies someone of selectable ammunitions
+Inputs:
+    [ARRAY] - Array previously built
+    Notifyee [ENTITY] - Someone or somthing the hint will be sent to
+]#
+function void array:renASLNotify(Notifyee:entity)
+{
+    local Message = "Selectable munitions: "
+
+    for(A=1,This:count())
+    {
+        #If this is the last selectable ammunition, end with a period
+        if(A==This:count()) {Message = Message+A+":"+This[A,string]+"."}
+
+        #Else just a list
+        else{Message = Message+A+":"+This[A,string]+", "}
+    }
+
+    Notifyee:renASLHint(Message)
+}
+
+#[Notifies someone of selectable ammunitions given the current gun index
+Inputs:
+    [NUMBER] - Index of currently selected gun
+    Notifyee [ENTITY] - Someone or somthing the hint will be sent to
+]#
+function void number:renASLNotify(Notifyee:entity)
+{
+    RenASL_SELECTABLE[This,array]:renASLNotify(Notifyee)
+}
+
+#[Activates and deactivates ammo crates based on selection
+Inputs:
+    [TABLE] - Table previously built
+    AIndex [NUMBER] - Index of ammunition to be activated
+    Selectable [ARRAY] - Array of selectable ammunitions from renASLSelectable()
+    Notifyee [ENITY] - Someone or somthing the hint will sent to
+]#
+function void table:renASLSelect(AIndex:number,Selectable:array,Notifyee:entity)
+{
+    if(AIndex>Selectable:count())
+    {
+        Notifyee:renASLHint("Impossible selection.")
+    }
+
+    else
+    {
+        This[Selectable[AIndex,string],array]:renASLActive(1)
+
+        local Temp = This:clone()
+
+        Temp:removeArray(Selectable[AIndex,string])
+
+        foreach(X,A:array = Temp) {A:renASLActive(0)}
+
+        Notifyee:renASLHint(Selectable[AIndex,string]+" selected.")
+    }
+}
+
+#[Activates and deactivates ammo crates for the specified gun
+Inputs:
+    GIndex [NUMBER] - Index of the currently selected gun
+    AIndex [NUMBER] - Index of ammunition to be activated
+    Notifyee [ENITY] - Soemone or somthing the hint will sent to
+]#
+function void renASLSelect(GIndex:number,AIndex:number,Notifyee:entity)
+{
+    RenASL_AMMOS[GIndex,table]:renASLSelect(AIndex,RenASL_SELECTABLE[GIndex,array],Notifyee)
+}

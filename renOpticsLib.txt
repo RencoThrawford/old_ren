@@ -1,0 +1,954 @@
+@name renOpticsLib
+@persist [RenOL_AimerTimer]:number
+@persist [RenOL_SIGHTMODE RenOL_ROTSIGHTAZI RenOL_ROTSIGHTELE]:number [RenOL_VERSION]:string [RenOL_RED RenOL_BLUE RenOL_GREEN RenOL_BLACK RenOL_WHITE RenOL_SCOPECOL]:vector4
+@persist [RenOL_CAMOMAT]:string [RenOL_CAMOCOLS RenOL_CAMONOT]:table
+@persist [RenOL_GLASS RenOL_REFLECTOR1 RenOL_REFLECTOR2 RenOL_SCOPEGLASS RenOL_AIMERMAT]:string
+@persist [RenOL_SCOPEPARENTI RenOL_AIMERI]:number [RenOL_SCOPEPARENTE]:entity [RenOL_SIGHTCAMO RenOL_SIGHTREFS RenOL_SCOPEREFS RenOL_AIMERREFS]:array
+@autoupdate on
+#[
+E2 Library By:
+    Renco - Nearly Everything
+    Red - Original Idea, Rotating Sights
+    Ghosteh - Aimer Holos, Additional Sights
+    Fizzles - Alpha Tester
+
+!!!!!
+REALLY DO-NOT RE-DISTRIBUTE!
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+This library is what I use to generate the sights (E2 Model), scope (Tube with glass), and aimer (The readouts and stuff)
+
+
+
+//////////VERSION LOG\\\\\\\\\\
+V0.0.0 (10-29-20) - Initial Development
+V0.0.1 (10-29-20)
+    [ADDED] entity:renOLVis(array,number); Sets visibility of holograms
+    [ADDED] number entity:renOLCreateSight(number,number); Creates a holographic sight on the entity specified
+    [ADDED] renOLCamoSight(string,string); Updates the colours of the E2 and holos to the camo color speciefied
+    [ADDED] renOLUpdateSight(vector); Updates rotating sights if we're using one
+    [ADDED] number number:renOLCreateScope; Creates a scope on the specified index, parents to the last one
+    [ADDED] number number:renOLCreateDayAimer; Creates a aimer (for daytime use)
+    [ADDED] number number:renOLCreateNightAimer; Creates a aimer (for nightime/FLIR use)
+    [ADDED] renOLDestroyAimer; Deletes all of the holograms relating to aimers
+    [ADDED] renOLUpdateDayAimer(number); Updates the daytime aimer with new info
+    [ADDED] renOLUpdateNightAimer(number); Updates the nightime aimer with new info
+V0.0.2 (11-11-20)
+    [ADDED] Ghosteh's 1A40-1 and M36E1 sights
+    [ADDED] Finished implementing Ghosteh's day and night aimers
+V0.0.3 (11-29-20)
+    [UPDATED] number number:renOLCreateScope(entity); Now updates visibility as soon as it's spawned
+    [UPDATED] number number:renOLCreateDayAimer(entity); Now updates visibility as soon as it's spawned
+    [UPDATED] number number:renOLCreateNightAimer(entity); Now updates visibility as soon as it's spawned
+    [ADDED] number number:renOLCreateBackupAimer(entity,table); Simple little backup sight, reads from red's range table
+    [ADDED] number number;renOLUpdateBackupAimer(table); Refreshes the backup sight with new range table
+V0.0.4 (12-13-20)
+    [FIXED] Numerous undocumented fixes with Fizzle's help
+V0.0.5 (12-17-20)
+    [UPDATED] Updated create* functions for visbility update
+    [ADDED] entity:renOLUpdateVisibility(number,number); Updates the visiblity of the sight, scope, and aimer
+V0.0.6 (12-25-20)
+    [ADDED] Added default camo material
+    [FIXED] Fixed several undocumented issues
+V0.0.7 (12-26-20)
+    [FIXED] Fixed rotating sight(s) not rotating
+V0.0.8 (12-27-20)
+    [FIXED] Fixed box sight spawning in the wrong direction
+V0.1.0 (12-28-20)
+    [UPDATED] Updated aimer update functions to update the range display
+    [UPDATED] Aimer creation now cleans up unused holograms after spawning (renOLDestroyAimer is now obsolete)
+    [UPDATED] renOLUpdateDayAimer(number,number,array); Removed This input, added readiness and objective indicator updating and inputs
+    [UPDATED] renOLUpdateNightAimer(number); Removed This input
+    [UPDATED] renOLUpdateBackupAimer(table); Removed This input
+    [REMOVED] Removed renOLDestroyAimer(); Refer to previous
+    [ADDED] number:renOLUpdateDigits(number); Sets the models of holograms to display a number
+    [ADDED] Added custom colour to scope glass to allow FLIR usage
+    [FIXED] Fixed the little line on the left being not in the right position
+    [FIXED] Fixed inconsent aimer cleanup
+V0.1.1 (12-29-20)
+    [ADDED] Added a generic new dual axis sight
+    [ADDED] Added a ugly new elevation only sight
+    [FIXED] Fixed small triangular sight
+V0.1.2 (01-16-21)
+    [ADDED] number:setSubMaterial(number,string); Sets the submaterial of a hologram (With #ifdef)
+    [ADDED] Added a new azimuth sight from red's old FCS
+V0.1.3 (01-20-21)
+    [ADDED] Added two new sizes of box sights
+
+
+
+//////////TO-DO\\\\\\\\\\
+Update box sight to use a plane instead of a plate
+    Add the other sizes of baseplates to it
+    Also convert ghosteh's to planes aswell
+    Multiple sizes based on what size base you use
+Implement Ghosteh's night scope
+Model the backup aimer
+    Ghosteh suggested increments of: 100m, 200m, 400m, 600m
+
+/////DONE\\\\\
+]#
+
+
+#//////////VARIABLES\\\\\\\\\#
+#You set one or both of these depending on how many or what axises the sight uses to the index of the thing everything is parented to
+RenOL_ROTSIGHTAZI=RenOL_ROTSIGHTELE = -1
+
+RenOL_VERSION = "V0.1.3"
+
+RenOL_GLASS = "phoenix_storms/pack2/glass"
+RenOL_REFLECTOR1 = "debug/env_cubemap_model"
+RenOL_REFLECTOR2 = "phoenix_storms/window"
+RenOL_SCOPEGLASS = "HUD/scope_sniper_ll"
+RenOL_AIMERMAT   = "models/ihvtest/eyeball_l"
+RenOL_RED   = vec4(255,100,100,180)
+RenOL_BLUE  = vec4(100,100,255,180)
+RenOL_GREEN = vec4(100,255,100,180)
+RenOL_BLACK = vec4(10,10,10,255)
+RenOL_WHITE = vec4(240,240,240,255)
+RenOL_SCOPECOL = vec4(200,200,200,50)
+
+RenOL_CAMOCOLS = table()
+RenOL_CAMOCOLS["red",vector]    = vec(255,0,0)
+RenOL_CAMOCOLS["green",vector]  = vec(0,255,0)
+RenOL_CAMOCOLS["blue",vector]   = vec(0,0,255)
+RenOL_CAMOCOLS["yellow",vector] = vec(255,255,0)
+RenOL_CAMOCOLS["teal",vector]   = vec(0,255,255)
+RenOL_CAMOCOLS["purple",vector] = vec(255,0,255)
+RenHCL_CAMONOT = table()
+RenHCL_CAMONOT["green",number] = 1
+RenHCL_CAMONOT["purple",number] = 1
+RenOL_CAMOMAT = "sprops/textures/sprops_metal6"
+
+
+
+#//////////FUNCTIONS\\\\\\\\\#
+#[This function sets the visibility of an array of hologram indexes to the player entity and other players accordingly
+Inputs:
+    [ENTITY] - The player you wish to have holograms visible for
+    Indexes [ARRAY] - The array of hologram indexes you wish to have their visibility changed
+    Invert [NUMBER] - Inverts who can/cannot see the holograms
+]#
+function void entity:renOLVis(Indexes:array,Invert:number)
+{
+    local OtherPlayers = array()
+
+    foreach(K,P:entity = players()) {if(P!=This){OtherPlayers:pushEntity(P)}}
+
+    for(I=1,Indexes:count())
+    {
+        local CurIndex = Indexes[I,number]
+        holoVisible(CurIndex,OtherPlayers,Invert)
+        holoVisible(CurIndex,This,!Invert)
+    }
+}
+
+#[This function updates 3 hologram numbers
+Inputs
+    [NUMBER] - The starting index for the numbers
+    Number [NUMBER] - The number to be displayed
+]#
+function void number:renOLUpdateDigits(Number:number)
+{
+    local RoundedNumber = min(int(Number),999)
+    local StringNumber = RoundedNumber:toString()
+
+    if(changed(RoundedNumber))
+    {
+        if(RoundedNumber > 100)
+        {
+            holoModel(This,"models/sprops/misc/alphanum/alphanum_"+StringNumber:index(1)+".mdl")
+            holoModel(This+1,"models/sprops/misc/alphanum/alphanum_"+StringNumber:index(2)+".mdl")
+            holoModel(This+2,"models/sprops/misc/alphanum/alphanum_"+StringNumber:index(3)+".mdl")
+        }
+        elseif(RoundedNumber > 10)
+        {
+            holoModel(This,"models/sprops/misc/alphanum/alphanum_0.mdl")
+            holoModel(This+1,"models/sprops/misc/alphanum/alphanum_"+StringNumber:index(1)+".mdl")
+            holoModel(This+2,"models/sprops/misc/alphanum/alphanum_"+StringNumber:index(2)+".mdl")
+        }
+        else
+        {
+            holoModel(This,"models/sprops/misc/alphanum/alphanum_0.mdl")
+            holoModel(This+1,"models/sprops/misc/alphanum/alphanum_0.mdl")
+            holoModel(This+2,"models/sprops/misc/alphanum/alphanum_"+StringNumber:index(1)+".mdl")
+        }
+    }
+}
+
+#[This function sets the submaterial of a hologram (Used for cleanliness)
+Inputs:
+    [NUMBER] - Index of the hologram
+    SubIndex [NUMBER] - Index of the submaterial
+    Material [STRING] - Material to replace the submaterial index
+]#
+function void number:setSubMaterial(SubIndex:number,Material:string)
+{
+    #ifdef entity:setSubMaterial(number,string)
+        holoEntity(This):setSubMaterial(SubIndex,Material)
+    #endif
+}
+
+#[This function creates a hologram sight on an entity of your choosing
+Inputs:
+    [ENTITY] - The entity of your choosing
+    Index [NUMBER] - The starting hologram index
+Return:
+    [NUMBER] - The last hologram index used by this function + 1, feed this into the starting index of the next function
+]#
+function number entity:renOLCreateSight(Index:number)
+{
+    local Index = Index
+    local Model = This:model()
+
+    switch(Model)
+    {
+        #!!STATIONARY SIGHTS!!#
+        #Wide triagnular stationary sight
+        case "models/sprops/prisms/tri/size_2/tprism_6x12.mdl",
+            #Borders
+            holoCreate(Index,This:toWorld(vec(-3.6,0,0)),vec(0.5,1,0.1),This:toWorld(ang(90,0,0)),vec(255),"hq_stube_thin")
+            holoParent(Index,This)
+            RenOL_SIGHTCAMO:pushNumber(Index)
+            RenOL_SIGHTREFS:pushNumber(Index)
+            Index++
+
+            #Glass
+            holoCreate(Index,This:toWorld(vec(-4,0,0)),vec(0.45,0.9,1),This:toWorld(ang(-90,0,0)),vec(255),"plane")
+            holoParent(Index,This)
+            holoMaterial(Index,RenOL_GLASS)
+            RenOL_SIGHTREFS:pushNumber(Index)
+            Index++
+
+            #Left Reflective Bit
+            holoCreate(Index,This:toWorld(vec(-3.2,-2.7,0)),vec(0.45,0.45,1),This:toWorld(ang(-90,0,0)),vec(255),"plane")
+            holoParent(Index,This)
+            holoMaterial(Index,RenOL_REFLECTOR1)
+            RenOL_SIGHTREFS:pushNumber(Index)
+            Index++
+
+            #Right Reflective Bit
+            holoCreate(Index,This:toWorld(vec(-3.2,2.7,0)),vec(0.45,0.45,1),This:toWorld(ang(-90,0,0)),vec(255),"plane")
+            holoParent(Index,This)
+            holoMaterial(Index,RenOL_REFLECTOR2)
+            RenOL_SIGHTREFS:pushNumber(Index)
+            Index++
+        break
+
+        #Triangular stationary sight
+        case "models/sprops/prisms/tri/size_2/tprism_6x6.mdl",
+            #Borders
+            holoCreate(Index,This:toWorld(vec(-3.6,0,0)),vec(0.5,0.5,0.1),This:toWorld(ang(90,0,0)),vec(255),"hq_stube_thin")
+            holoParent(Index,This)
+            RenOL_SIGHTCAMO:pushNumber(Index)
+            RenOL_SIGHTREFS:pushNumber(Index)
+            Index++
+
+            #Glass
+            holoCreate(Index,This:toWorld(vec(-4,0,0)),vec(0.45,0.45,1),This:toWorld(ang(-90,0,0)),vec(255),"plane")
+            holoParent(Index,This)
+            holoMaterial(Index,RenOL_GLASS)
+            RenOL_SIGHTREFS:pushNumber(Index)
+            Index++
+
+            #Reflective Bit
+            holoCreate(Index,This:toWorld(vec(-3.2,0,0)),vec(0.45,0.45,1),This:toWorld(ang(-90,0,0)),vec(255),"plane")
+            holoParent(Index,This)
+            holoMaterial(Index,RenOL_REFLECTOR1)
+            RenOL_SIGHTREFS:pushNumber(Index)
+            Index++
+        break
+
+        #1A40-1 based sight
+        case "models/sprops/cuboids/height06/size_1/cube_6x12x6.mdl",
+            #Housing
+            holoCreate(Index,This:toWorld(vec(0.06,-0.4,-0.2)),vec(0.8,1.17,0.6),This:toWorld(ang(-1.5,90,0)),vec(255),"models/props_lab/powerbox02c.mdl")
+            holoParent(Index,This)
+            RenOL_SIGHTCAMO:pushNumber(Index)
+            RenOL_SIGHTREFS:pushNumber(Index)
+            Index++
+
+            #Glass Housing
+            holoCreate(Index,This:toWorld(vec(0,0.1,-0.6)),vec(0.5,0.9,-0.6),This:toWorld(ang(-89,90,0)),vec(255),"models/sprops/trans/misc/shiftplate_s.mdl")
+            holoParent(Index,This)
+            RenOL_SIGHTCAMO:pushNumber(Index)
+            RenOL_SIGHTREFS:pushNumber(Index)
+            Index++
+
+            #Glass
+            holoCreate(Index,This:toWorld(vec(0,3.9,-0.8)),vec(0.4,0.4,0.1),This:toWorld(ang(0,0,-91)),vec(255),"models/hunter/plates/plate025x025.mdl")
+            holoParent(Index,This)
+            holoMaterial(Index,RenOL_GLASS)
+            RenOL_SIGHTREFS:pushNumber(Index)
+            Index++
+
+            #Left Sight
+            holoCreate(Index,This:toWorld(vec(1.2,3,-0.8)),vec(0.2,0.4,0.4),This:toWorld(ang(0,0,-91)),vec(255),"models/hunter/plates/plate025x025.mdl")
+            holoParent(Index,This)
+            holoMaterial(Index,RenOL_REFLECTOR1)
+            RenOL_SIGHTREFS:pushNumber(Index)
+            Index++
+
+            #Right Sight
+            holoCreate(Index,This:toWorld(vec(-1.2,3,-0.7)),vec(0.2,0.5,0.4),This:toWorld(ang(0,0,-91)),vec(255),"models/hunter/plates/plate025x025.mdl")
+            holoParent(Index,This)
+            holoMaterial(Index,RenOL_REFLECTOR2)
+            RenOL_SIGHTREFS:pushNumber(Index)
+            Index++
+        break
+
+        #M36E1 based sight
+        case "models/sprops/rectangles/size_1_5/rect_6x12x3.mdl",
+            #Housing
+            holoCreate(Index,This:toWorld(vec(0,-1.1,2.75)),vec(0.3,0.6,0.35),This:toWorld(ang(0,90,0)),vec(255),"models/props_c17/light_decklight01_off.mdl")
+            holoParent(Index,This)
+            RenOL_SIGHTCAMO:pushNumber(Index)
+            RenOL_SIGHTREFS:pushNumber(Index)
+            Index++
+
+            #Glass housing
+            holoCreate(Index,This:toWorld(vec(0,1,3.75)),vec(0.306,0.51,0.51),This:toWorld(ang(0,-90,-90)),vec(255),"models/props_junk/CinderBlock01a.mdl")
+            holoParent(Index,This)
+            RenOL_SIGHTCAMO:pushNumber(Index)
+            RenOL_SIGHTREFS:pushNumber(Index)
+            Index++
+
+            #Glass
+            holoCreate(Index,This:toWorld(vec(0,2.4,3.6)),vec(0.8,0.4,0.05),This:toWorld(ang(0,0,-90)),vec(255),"models/hunter/plates/plate025x025.mdl")
+            holoParent(Index,This)
+            holoMaterial(Index,RenOL_GLASS)
+            RenOL_SIGHTREFS:pushNumber(Index)
+            Index++
+
+            #Left Sight
+            holoCreate(Index,This:toWorld(vec(2.5,1.5,4)),vec(0.35,0.4,0.5),This:toWorld(ang(0,0,-90)),vec(255),"models/hunter/plates/plate025x025.mdl")
+            holoParent(Index,This)
+            holoMaterial(Index,RenOL_REFLECTOR1)
+            RenOL_SIGHTREFS:pushNumber(Index)
+            Index++
+
+            #Right Sight
+            holoCreate(Index,This:toWorld(vec(-2.3,1.3,4)),vec(0.35,0.4,0.5),This:toWorld(ang(0,0,-95)),vec(255),"models/hunter/plates/plate025x025.mdl")
+            holoParent(Index,This)
+            holoMaterial(Index,RenOL_REFLECTOR2)
+            RenOL_SIGHTREFS:pushNumber(Index)
+            Index++
+        break
+
+
+        #!!DUAL AXIS SIGHTS!!#
+        #Generic dual axis
+        case "models/props_phx/misc/potato_launcher_cap.mdl",
+            RenOL_SIGHTMODE = 1
+            #Azimuth Base
+            holoCreate(Index,This:toWorld(vec(0,0,1.45)),vec(1.25,1.25,1),This:toWorld(ang(0)),vec(255),"cplane")
+            holoParent(Index,This)
+            RenOL_ROTSIGHTAZI = Index
+            local AziBase = holoEntity(Index)
+            RenOL_SIGHTCAMO:pushNumber(Index)
+            RenOL_SIGHTREFS:pushNumber(Index)
+            Index++
+
+            #Left Holder
+            holoCreate(Index,AziBase:toWorld(vec(0,5,5)),vec(0.25,0.15,0.25),This:toWorld(ang(0,90,0)),vec(255),"models/props_c17/gravestone003a.mdl")
+            holoParent(Index,AziBase)
+            RenOL_SIGHTCAMO:pushNumber(Index)
+            RenOL_SIGHTREFS:pushNumber(Index)
+            Index++
+
+            #Right Holder
+            holoCreate(Index,AziBase:toWorld(vec(0,-5,5)),vec(0.25,0.15,0.25),This:toWorld(ang(0,-90,0)),vec(255),"models/props_c17/gravestone003a.mdl")
+            holoParent(Index,AziBase)
+            RenOL_SIGHTCAMO:pushNumber(Index)
+            RenOL_SIGHTREFS:pushNumber(Index)
+            Index++
+
+            #Elevation Base
+            holoCreate(Index,AziBase:toWorld(vec(0,0,7)),vec(0),AziBase:toWorld(ang(0)),vec4(0),"cube")
+            holoParent(Index,AziBase)
+            RenOL_ROTSIGHTELE = Index
+            local EleBase = holoEntity(Index)
+            RenOL_SIGHTREFS:pushNumber(Index)
+            Index++
+
+            #Reflector Holder
+            holoCreate(Index,EleBase:toWorld(vec(0)),vec(0.5),EleBase:toWorld(ang(90,0,0)),vec(255),"models/Items/car_battery01.mdl")
+            holoParent(Index,EleBase)
+            local RefBase = holoEntity(Index)
+            RenOL_SIGHTCAMO:pushNumber(Index)
+            RenOL_SIGHTREFS:pushNumber(Index)
+            Index++
+
+            #Glass
+            holoCreate(Index,RefBase:toWorld(vec(0,0,2.75)),vec(0.36,0.5,1),RefBase:toWorld(ang(0)),vec(255),"plane")
+            holoParent(Index,RefBase)
+            holoMaterial(Index,RenOL_GLASS)
+            RenOL_SIGHTREFS:pushNumber(Index)
+            Index++
+
+            #Left Reflector
+            holoCreate(Index,RefBase:toWorld(vec(0.1,1.35,2.5)),vec(0.36,0.23,1),RefBase:toWorld(ang(0)),vec(255),"plane")
+            holoParent(Index,RefBase)
+            holoMaterial(Index,RenOL_REFLECTOR1)
+            RenOL_SIGHTREFS:pushNumber(Index)
+            Index++
+
+            #Right Reflector
+            holoCreate(Index,RefBase:toWorld(vec(0.1,-1.35,2.5)),vec(0.36,0.23,1),RefBase:toWorld(ang(0)),vec(255),"plane")
+            holoParent(Index,RefBase)
+            holoMaterial(Index,RenOL_REFLECTOR2)
+            RenOL_SIGHTREFS:pushNumber(Index)
+            Index++
+        break
+
+
+        #!!AZIMUTH SIGHTS!!#
+        #Box Sight
+        case "models/xqm/button1.mdl",
+        case "models/xqm/button2.mdl",
+        case "models/xqm/button3.mdl",
+            RenOL_SIGHTMODE = 2
+            local Scale = 1
+            if(Model == "models/xqm/button1.mdl") {Scale = 0.5}
+            elseif(Model == "models/xqm/button3.mdl") {Scale = 1.5}
+            #Box
+            holoCreate(Index,This:toWorld(vec(0,0,5.05)*Scale),vec(0.7)*Scale,This:toWorld(ang(0)),vec(255),"models/props_lab/powerbox02c.mdl")
+            holoParent(Index,This)
+            RenOL_ROTSIGHTAZI = Index
+            local Box = holoEntity(Index)
+            RenOL_SIGHTCAMO:pushNumber(Index)
+            RenOL_SIGHTREFS:pushNumber(Index)
+            Index++
+
+            #Reflector
+            holoCreate(Index,Box:toWorld(vec(3.3,0,0.4)*Scale),vec(0.5,0.5,1)*Scale,Box:toWorld(ang(90,0,0)),vec(255),"plane")
+            holoParent(Index,RenOL_ROTSIGHTAZI)
+            holoMaterial(Index,RenOL_REFLECTOR2)
+            RenOL_SIGHTREFS:pushNumber(Index)
+            Index++
+        break
+
+        #Low Profile
+        case "models/maxofs2d/hover_plate.mdl",
+            RenOL_SIGHTMODE = 2
+            #Body
+            holoCreate(Index,This:toWorld(vec(0,0,3.5)),vec(1,0.5,0.3),This:toWorld(ang(0)),vec(255),"models/props_c17/light_decklight01_off.mdl")
+            holoParent(Index,This)
+            holoClipEnabled(Index,1)
+            holoClip(Index,vec(4.5,0,0),vec(-1,0,0),0)
+            RenOL_ROTSIGHTAZI = Index
+            RenOL_SIGHTCAMO:pushNumber(Index)
+            RenOL_SIGHTREFS:pushNumber(Index)
+            Index++
+
+            #Sight
+            holoCreate(Index,This:toWorld(vec(3.2,0,4.25)),vec(0.79,0.79,0.8),This:toWorld(ang(0)),vec(255),"models/sprops/trans/lights/light_c4.mdl")
+            holoParent(Index,RenOL_ROTSIGHTAZI)
+            holoSkin(Index,3) #Used as sort of a fall back if the server dosent have submaterial for some reason
+            Index:setSubMaterial(0,"WTP/metal_5")
+            Index:setSubMaterial(4,"sprops/textures/exh_inner")
+            Index:setSubMaterial(7,RenOL_GLASS)
+            RenOL_SIGHTREFS:pushNumber(Index)
+            Index++
+        break
+
+
+        #!!ELEVATION SIGHTS!!#
+        #Ugly Sight
+        case "models/hunter/plates/plate025x025.mdl",
+            RenOL_SIGHTMODE = 3
+            #Holder
+            holoCreate(Index,This:toWorld(vec(0,2.5,5)),vec(0.25,0.25,0.25),This:toWorld(ang(0,90,0)),vec(255),"models/props_c17/gravestone003a.mdl")
+            holoParent(Index,This)
+            RenOL_SIGHTCAMO:pushNumber(Index)
+            RenOL_SIGHTREFS:pushNumber(Index)
+            Index++
+
+            #Sight Holder
+            holoCreate(Index,This:toWorld(vec(0,0,7)),vec(1),This:toWorld(ang(0)),vec(255),"models/props_lab/reciever01d.mdl")
+            holoParent(Index,This)
+            RenOL_ROTSIGHTELE = Index
+            local Holder = holoEntity(Index)
+            RenOL_SIGHTCAMO:pushNumber(Index)
+            RenOL_SIGHTREFS:pushNumber(Index)
+            Index++
+
+            #Reflector
+            holoCreate(Index,Holder:toWorld(vec(5.8,-2.7,-0.42)),vec(0.21,0.41,1),Holder:toWorld(ang(90,0,0)),vec(255),"plane")
+            holoParent(Index,Holder)
+            holoMaterial(Index,RenOL_REFLECTOR1)
+            RenOL_SIGHTREFS:pushNumber(Index)
+            Index++
+        break
+    }
+
+    return Index
+}
+
+#[This function sets the camo color of the sight+E2 to whatever you specify, can also set material if the camo color only does color
+Just call this after you've built the sight
+Inputs:
+    Colour [STRING] - The name of the color things will be coloured to
+    Material [STRING] - The material that will be used if the color specified only does color
+]#
+function void renOLCamoSight(Colour:string,Material:string)
+{
+    if(RenOL_SIGHTCAMO:count())
+    {
+        local Lower = Colour:lower()
+        local Color = RenOL_CAMOCOLS[Colour,vector]
+        local Mat = Material
+        if(!RenOL_CAMONOT[Lower,number]) {Mat = RenOL_CAMOMAT}
+
+        for(H=1,RenOL_SIGHTCAMO:count())
+        {
+            holoColor(RenOL_SIGHTCAMO[H,number],Color)
+            holoMaterial(RenOL_SIGHTCAMO[H,number],Mat)
+        }
+
+        entity():setColor(Color)
+        entity():setMaterial(Mat)
+    }
+}
+
+#[This function updates the sight (Will only do anything if we're using a rotating sight)
+Inputs:
+    Aimpos [VECTOR] - Where we're aiming so the sight will point at that
+]#
+function void renOLUpdateSight(Aimpos:vector)
+{
+    switch(RenOL_SIGHTMODE)
+    {
+        #Two Axis (Azimuth & Elevation) {Left/Right, Up/Down}
+        case 1,
+            local AziEnt = holoEntity(RenOL_ROTSIGHTAZI)
+            local EleEnt = holoEntity(RenOL_ROTSIGHTELE)
+
+            #Probably wont work
+            holoAng(RenOL_ROTSIGHTAZI,AziEnt:toWorld(ang(0,AziEnt:bearing(Aimpos)*-0.5,0)))
+            holoAng(RenOL_ROTSIGHTELE,EleEnt:toWorld(ang(EleEnt:elevation(Aimpos)*-0.5,0,0)))
+        break
+
+        #One Axis (Azimuth) {Left/Right}
+        case 2,
+            local AziEnt = holoEntity(RenOL_ROTSIGHTAZI)
+
+            #Should work?
+            holoAng(RenOL_ROTSIGHTAZI,AziEnt:toWorld(ang(0,AziEnt:bearing(Aimpos)*-0.5,0)))
+        break
+
+        #One Axis (Elevation) {Up/Down}
+        case 3,
+            local EleEnt = holoEntity(RenOL_ROTSIGHTELE)
+
+            holoAng(RenOL_ROTSIGHTELE,EleEnt:toWorld(ang(EleEnt:elevation(Aimpos)*-0.5,0,0)))
+        break
+    }
+}
+
+#[This function creates a scope and parents it to the previous index
+Inputs:
+    [NUMBER] - The starting index, will parent to the last index (Index-1) If no hologram is found, this will fail and return the index you gave it
+    Gunner [ENTITY] - The gunner who will see the scope
+Return:
+    [NUMBER] - The last holo index used + 1
+]#
+function number number:renOLCreateScope(Gunner:entity)
+{
+    RenOL_SCOPEPARENTI = This-1
+    RenOL_SCOPEPARENTE = holoEntity(RenOL_SCOPEPARENTI) #too lazy to fix ghosteh's aimer(s)
+    local Index = This
+    local Indexes = array()
+
+    if(RenOL_SCOPEPARENTE:isValid())
+    {
+        #Scope Tube
+        holoCreate(Index,RenOL_SCOPEPARENTE:toWorld(vec(2.5,0,0)),vec(1),RenOL_SCOPEPARENTE:toWorld(ang(90,0,0)),vec(0),"hq_tube_thin")
+        holoParent(Index,RenOL_SCOPEPARENTI)
+        holoDisableShading(Index,1)
+        Indexes:pushNumber(Index)
+        Index++
+
+        #Scope Glass
+        holoCreate(Index,RenOL_SCOPEPARENTE:toWorld(vec(8.5,0,0)),vec(0.33,0.33,0.01),RenOL_SCOPEPARENTE:toWorld(ang(-90,0,0)),RenOL_SCOPECOL,"models/sprops/misc/domes/size_3/dome_36x18.mdl")
+        holoParent(Index,RenOL_SCOPEPARENTI)
+        holoMaterial(Index,RenOL_SCOPEGLASS)
+        holoDisableShading(Index,1)
+        Indexes:pushNumber(Index)
+        Index++
+
+        Gunner:renOLVis(Indexes,0)
+        RenOL_SCOPEREFS = Indexes
+        
+        RenOL_SCOPEPARENTE = holoEntity(RenOL_SCOPEPARENTI+2)
+    }
+
+    return Index
+}
+
+#[This function creates the day aimer, it requires the scope to be built first or it will fail!
+Inputs:
+    [NUMBER] - The starting index, just give it the index the scope returned
+    Gunner [ENTITY] - The gunner who will see the scope
+Return:
+    [NUMBER] - The last used holo index + 1
+]#
+function number number:renOLCreateDayAimer(Gunner:entity)
+{
+    RenOL_AIMERI = This
+    local Index = This
+    local Indexes = array()
+
+    if(RenOL_SCOPEPARENTE:isValid())
+    {
+        #//MAIN\\#
+        #Middle V
+        holoCreate(Index,RenOL_SCOPEPARENTE:toWorld(vec(-0.04,0,2)),vec(0.006,0.0001,0.006),RenOL_SCOPEPARENTE:toWorld(ang(0,-45,90)),RenOL_RED,"models/mechanics/solid_steel/l_beam_4.mdl")
+        holoParent(Index,RenOL_SCOPEPARENTI)
+        holoMaterial(Index,RenOL_AIMERMAT)
+        holoDisableShading(Index,1)
+        Indexes:pushNumber(Index)
+        Index++
+
+        #Middle Line
+        holoCreate(Index,RenOL_SCOPEPARENTE:toWorld(vec(-0.16,0,2)),vec(0.0006,0.026,0.0006),RenOL_SCOPEPARENTE:toWorld(ang(0,90,0)),RenOL_RED,"plane")
+        holoParent(Index,RenOL_SCOPEPARENTI)
+        holoMaterial(Index,RenOL_AIMERMAT)
+        holoDisableShading(Index,1)
+        Indexes:pushNumber(Index)
+        Index++
+
+        #Left Line
+        #holoCreate(index,position,scale,angle,color,model)
+        holoCreate(Index,RenOL_SCOPEPARENTE:toWorld(vec(0.01,-0.22,2)),vec(0.0006,0.023,0.0006),RenOL_SCOPEPARENTE:toWorld(ang(0)),RenOL_RED,"plane")
+        holoParent(Index,RenOL_SCOPEPARENTI)
+        holoMaterial(Index,RenOL_AIMERMAT)
+        holoDisableShading(Index,1)
+        Indexes:pushNumber(Index)
+        Index++
+
+        #Right Line
+        holoCreate(Index,RenOL_SCOPEPARENTE:toWorld(vec(0.01,0.22,2)),vec(0.0006,0.023,0.0006),RenOL_SCOPEPARENTE:toWorld(ang(0)),RenOL_RED,"plane")
+        holoParent(Index,RenOL_SCOPEPARENTI)
+        holoMaterial(Index,RenOL_AIMERMAT)
+        holoDisableShading(Index,1)
+        Indexes:pushNumber(Index)
+        Index++
+
+        #Left Small Pip
+        holoCreate(Index,RenOL_SCOPEPARENTE:toWorld(vec(-0.06,0.085,2)),vec(0.004,0.005,0.005),RenOL_SCOPEPARENTE:toWorld(ang(0)),RenOL_RED,"models/Squad/sf_bars/sf_bar25x25x1.mdl")
+        holoParent(Index,RenOL_SCOPEPARENTI)
+        holoMaterial(Index,RenOL_AIMERMAT)
+        holoDisableShading(Index,1)
+        Indexes:pushNumber(Index)
+        Index++
+
+        #Right Small Pip
+        holoCreate(Index,RenOL_SCOPEPARENTE:toWorld(vec(-0.06,-0.085,2)),vec(0.004,0.005,0.005),RenOL_SCOPEPARENTE:toWorld(ang(0)),RenOL_RED,"models/Squad/sf_bars/sf_bar25x25x1.mdl")
+        holoParent(Index,RenOL_SCOPEPARENTI)
+        holoMaterial(Index,RenOL_AIMERMAT)
+        holoDisableShading(Index,1)
+        Indexes:pushNumber(Index)
+        Index++
+
+
+        #//OUTER LINES\\#
+        #Middle
+        holoCreate(Index,RenOL_SCOPEPARENTE:toWorld(vec(1,0,2)),vec(0.0006,0.01,0.0006),RenOL_SCOPEPARENTE:toWorld(ang(0)),RenOL_RED,"plane")
+        holoParent(Index,RenOL_SCOPEPARENTI)
+        holoMaterial(Index,RenOL_AIMERMAT)
+        holoDisableShading(Index,1)
+        Indexes:pushNumber(Index)
+        Index++
+
+        #Left
+        holoCreate(Index,RenOL_SCOPEPARENTE:toWorld(vec(0.01,-2,2)),vec(0.0006,0.01,0.0006),RenOL_SCOPEPARENTE:toWorld(ang(0,90,0)),RenOL_RED,"plane")
+        holoParent(Index,RenOL_SCOPEPARENTI)
+        holoMaterial(Index,RenOL_AIMERMAT)
+        holoDisableShading(Index,1)
+        Indexes:pushNumber(Index)
+        Index++
+
+        #Right
+        holoCreate(Index,RenOL_SCOPEPARENTE:toWorld(vec(0.01,2,2)),vec(0.0006,0.01,0.0006),RenOL_SCOPEPARENTE:toWorld(ang(0,90,0)),RenOL_RED,"plane")
+        holoParent(Index,RenOL_SCOPEPARENTI)
+        holoMaterial(Index,RenOL_AIMERMAT)
+        holoDisableShading(Index,1)
+        Indexes:pushNumber(Index)
+        Index++
+
+
+        #//RANGE NUMBERS\\#
+        #Left Range Digit
+        holoCreate(Index,RenOL_SCOPEPARENTE:toWorld(vec(-1,0.2,2)),vec(0.01),RenOL_SCOPEPARENTE:toWorld(ang(0,90,90)),RenOL_RED,"models/sprops/misc/alphanum/alphanum_0.mdl")
+        holoParent(Index,RenOL_SCOPEPARENTI)
+        holoMaterial(Index,RenOL_AIMERMAT)
+        holoDisableShading(Index,1)
+        holoBodygroup(Index,0,3)
+        Indexes:pushNumber(Index)
+        Index++
+
+        #Middle Range Digit
+        holoCreate(Index,RenOL_SCOPEPARENTE:toWorld(vec(-1,0,2)),vec(0.01),RenOL_SCOPEPARENTE:toWorld(ang(0,90,90)),RenOL_RED,"models/sprops/misc/alphanum/alphanum_0.mdl")
+        holoParent(Index,RenOL_SCOPEPARENTI)
+        holoMaterial(Index,RenOL_AIMERMAT)
+        holoDisableShading(Index,1)
+        holoBodygroup(Index,0,3)
+        Indexes:pushNumber(Index)
+        Index++
+
+        #Right Range Digit
+        holoCreate(Index,RenOL_SCOPEPARENTE:toWorld(vec(-1,-0.2,2)),vec(0.01),RenOL_SCOPEPARENTE:toWorld(ang(0,90,90)),RenOL_RED,"models/sprops/misc/alphanum/alphanum_0.mdl")
+        holoParent(Index,RenOL_SCOPEPARENTI)
+        holoMaterial(Index,RenOL_AIMERMAT)
+        holoDisableShading(Index,1)
+        holoBodygroup(Index,0,3)
+        Indexes:pushNumber(Index)
+        Index++
+
+
+        #//INDICATORS\\#
+        #Objective Indicator
+        holoCreate(Index,RenOL_SCOPEPARENTE:toWorld(vec(-1,0.4,2)),vec(0.008),RenOL_SCOPEPARENTE:toWorld(ang(0,90,90)),RenOL_RED,"models/sprops/misc/alphanum/alphanum_arrow_b.mdl")
+        holoParent(Index,RenOL_SCOPEPARENTI)
+        holoMaterial(Index,RenOL_AIMERMAT)
+        holoDisableShading(Index,1)
+        Indexes:pushNumber(Index)
+        Index++
+
+        #Readiness Indicator
+        holoCreate(Index,RenOL_SCOPEPARENTE:toWorld(vec(-1,-0.4,2)),vec(0.004),RenOL_SCOPEPARENTE:toWorld(ang(0)),RenOL_RED,"hq_sphere")
+        holoParent(Index,RenOL_SCOPEPARENTI)
+        holoMaterial(Index,RenOL_AIMERMAT)
+        holoDisableShading(Index,1)
+        Indexes:pushNumber(Index)
+        Index++
+
+        #Used 14 holos out of 20
+        Gunner:renOLVis(Indexes,0)
+        RenOL_AIMERREFS = Indexes
+        for(D=14,20) {holoDelete(RenOL_AIMERI+D)}
+    }
+
+    return Index
+}
+
+#[This function creates the night aimer, also requires the scope to be built first
+Inputs:
+    [NUMBER] - The starting index
+    Gunner [ENTITY] - The gunner who will see the scope
+Return:
+    [NUMBER] - The last used holo index + 1
+]#
+function number number:renOLCreateNightAimer(Gunner:entity)
+{
+    RenOL_AIMERI = This
+    local Index = This
+    local Indexes = array()
+
+    if(RenOL_SCOPEPARENTE:isValid())
+    {
+        #//MAIN\\#
+        #holoCreate(index,position,scale,angle,color,model)
+        #Middle Vertical
+        holoCreate(Index,RenOL_SCOPEPARENTE:toWorld(vec(0,0,2)),vec(0.0006,0.03,0.0006),RenOL_SCOPEPARENTE:toWorld(ang(0,90,0)),RenOL_WHITE,"plane")
+        holoParent(Index,RenOL_SCOPEPARENTI)
+        holoMaterial(Index,RenOL_AIMERMAT)
+        holoDisableShading(Index,1)
+        Indexes:pushNumber(Index)
+        Index++
+
+        #Middle Horizontal
+        holoCreate(Index,RenOL_SCOPEPARENTE:toWorld(vec(0,0,2)),vec(0.0006,0.05,0.0006),RenOL_SCOPEPARENTE:toWorld(ang(0)),RenOL_WHITE,"plane")
+        holoParent(Index,RenOL_SCOPEPARENTI)
+        holoMaterial(Index,RenOL_AIMERMAT)
+        holoDisableShading(Index,1)
+        Indexes:pushNumber(Index)
+        Index++
+
+        #Up
+        holoCreate(Index,RenOL_SCOPEPARENTE:toWorld(vec(0.3,0,2)),vec(0.0006,0.01,0.0006),RenOL_SCOPEPARENTE:toWorld(ang(0,90,0)),RenOL_WHITE,"plane")
+        holoParent(Index,RenOL_SCOPEPARENTI)
+        holoMaterial(Index,RenOL_AIMERMAT)
+        holoDisableShading(Index,1)
+        Indexes:pushNumber(Index)
+        Index++
+
+        #Down
+        holoCreate(Index,RenOL_SCOPEPARENTE:toWorld(vec(-0.3,0,2)),vec(0.0006,0.01,0.0006),RenOL_SCOPEPARENTE:toWorld(ang(0,90,0)),RenOL_WHITE,"plane")
+        holoParent(Index,RenOL_SCOPEPARENTI)
+        holoMaterial(Index,RenOL_AIMERMAT)
+        holoDisableShading(Index,1)
+        Indexes:pushNumber(Index)
+        Index++
+
+        #Left
+        holoCreate(Index,RenOL_SCOPEPARENTE:toWorld(vec(0,0.45,2)),vec(0.0006,0.015,0.0006),RenOL_SCOPEPARENTE:toWorld(ang(0)),RenOL_WHITE,"plane")
+        holoParent(Index,RenOL_SCOPEPARENTI)
+        holoMaterial(Index,RenOL_AIMERMAT)
+        holoDisableShading(Index,1)
+        Indexes:pushNumber(Index)
+        Index++
+
+        #Right
+        holoCreate(Index,RenOL_SCOPEPARENTE:toWorld(vec(0,-0.45,2)),vec(0.0006,0.015,0.0006),RenOL_SCOPEPARENTE:toWorld(ang(0)),RenOL_WHITE,"plane")
+        holoParent(Index,RenOL_SCOPEPARENTI)
+        holoMaterial(Index,RenOL_AIMERMAT)
+        holoDisableShading(Index,1)
+        Indexes:pushNumber(Index)
+        RenOL_SCOPEREFS:pushNumber(Index)
+        Index++
+
+
+        #//RANGE\\#
+        #Backing
+        holoCreate(Index,RenOL_SCOPEPARENTE:toWorld(vec(-1,-0.8,2)),vec(0.014,0.045,0.0006),RenOL_SCOPEPARENTE:toWorld(ang(0)),RenOL_BLACK,"plane")
+        holoParent(Index,RenOL_SCOPEPARENTI)
+        holoMaterial(Index,RenOL_AIMERMAT)
+        holoDisableShading(Index,1)
+        Indexes:pushNumber(Index)
+        Index++
+
+        #Left Range Digit
+        holoCreate(Index,RenOL_SCOPEPARENTE:toWorld(vec(-1,-0.6,2)),vec(0.01),RenOL_SCOPEPARENTE:toWorld(ang(0,90,90)),RenOL_WHITE,"models/sprops/misc/alphanum/alphanum_0.mdl")
+        holoParent(Index,RenOL_SCOPEPARENTI)
+        holoMaterial(Index,RenOL_AIMERMAT)
+        holoDisableShading(Index,1)
+        holoBodygroup(Index,0,3)
+        Indexes:pushNumber(Index)
+        Index++
+
+        #Middle Range Digit
+        holoCreate(Index,RenOL_SCOPEPARENTE:toWorld(vec(-1,-0.8,2)),vec(0.01),RenOL_SCOPEPARENTE:toWorld(ang(0,90,90)),RenOL_WHITE,"models/sprops/misc/alphanum/alphanum_0.mdl")
+        holoParent(Index,RenOL_SCOPEPARENTI)
+        holoMaterial(Index,RenOL_AIMERMAT)
+        holoDisableShading(Index,1)
+        holoBodygroup(Index,0,3)
+        Indexes:pushNumber(Index)
+        Index++
+
+        #Right Range Digit
+        holoCreate(Index,RenOL_SCOPEPARENTE:toWorld(vec(-1,-1,2)),vec(0.01),RenOL_SCOPEPARENTE:toWorld(ang(0,90,90)),RenOL_WHITE,"models/sprops/misc/alphanum/alphanum_0.mdl")
+        holoParent(Index,RenOL_SCOPEPARENTI)
+        holoMaterial(Index,RenOL_AIMERMAT)
+        holoDisableShading(Index,1)
+        holoBodygroup(Index,0,3)
+        Indexes:pushNumber(Index)
+        Index++
+
+        Gunner:renOLVis(Indexes,0)
+        RenOL_AIMERREFS = Indexes
+        for(D=10,20) {holoDelete(RenOL_AIMERI+D)}
+    }
+
+    return Index
+}
+
+#[This function creates a backup aimer for when your FCS get shot out, or when you want to do things manually
+Inputs:
+    [NUMBER] - The starting index
+    Gunner [ENTITY] - Gunner who will see the aimer
+    RangeTable [TABLE] - Range table from FCS
+Return:
+    [NUMBER] The last used index +1
+]#
+function number number:renOLCreateBackupAimer(Gunner:entity,RangeTable:table)
+{
+    RenOL_AIMERI = This
+    local Index = This
+    local Indexes = array()
+
+    if(RenOL_SCOPEPARENTE:isValid())
+    {
+        Gunner:renOLVis(Indexes,0)
+        RenOL_AIMERREFS = Indexes
+        for(D=0,20) {holoDelete(RenOL_AIMERI+D)}
+    }
+
+    return Index
+}
+
+#[This function updates the day aimer with new information
+Inputs:
+    Range [NUMBER] - The range from where we're aiming
+    GunReady [NUMBER] - Is the gun ready to fire or not
+    SCRLData [ARRAY]  - Data from SCRL
+]#
+function void renOLUpdateDayAimer(Range:number,GunReady:number,SCRLData:array)
+{
+    if(RenOL_SCOPEPARENTE:isValid())
+    {
+        #Range update
+        if((RenOL_AimerTimer % 16) == 1)
+        {
+            (RenOL_AIMERI+9):renOLUpdateDigits(Range)
+        }
+
+        #Objective indicator update
+        if((RenOL_AimerTimer % 8) == 1)
+        {
+            if(SCRLData:count())
+            {
+                
+            }
+        }
+
+        #Gun readiness indicator update
+        if((RenOL_AimerTimer % 4) == 1)
+        {
+            holoColor(RenOL_AIMERI+13,GunReady ? RenOL_GREEN : RenOL_RED)
+        }
+
+        if(RenOL_AimerTimer) {RenOL_AimerTimer = RenOL_AimerTimer-1} else{RenOL_AimerTimer = 20}
+    }
+}
+
+#[This function updates the night aimer with new info
+Inputs:
+    Range [NUMBER] - The range to aimpos or somthing
+]#
+function void renOLUpdateNightAimer(Range:number)
+{
+    if(RenOL_SCOPEPARENTE:isValid())
+    {
+        #Range update
+        if((RenOL_AimerTimer % 16) == 1)
+        {
+            (RenOL_AIMERI+7):renOLUpdateDigits(Range)
+        }
+
+        if(RenOL_AimerTimer) {RenOL_AimerTimer = RenOL_AimerTimer-1} else{RenOL_AimerTimer = 20}
+    }
+}
+
+#[This function refreshes the range table on the backup aimer
+Inputs:
+    RangeTable [TABLE] - Range table from FCS
+]#
+function void renOLUpdateBackupAimer(RangeTable:table)
+{
+    if(RenOL_SCOPEPARENTE:isValid())
+    {
+        if(RenOL_AimerTimer) {RenOL_AimerTimer = RenOL_AimerTimer-1} else{RenOL_AimerTimer = 20}
+    }
+}
+
+#[This function updates the visbility for the sight, scope, and aimer
+Inputs:
+    [ENTITY] - The person who will see the scope and aimer and not see the sight in first person
+    CamOn [NUMBER] - Is the camera on
+    ThirdPerson [NUMBER] - Is the gunner in third person?
+]#
+function void entity:renOLUpdateVisibility(CamOn:number,ThirdPerson:number)
+{
+    local Person = noentity()
+
+    if(CamOn&(!ThirdPerson)) {Person = This}
+
+    Person:renOLVis(RenOL_SIGHTREFS,1)
+    Person:renOLVis(RenOL_SCOPEREFS,0)
+    Person:renOLVis(RenOL_AIMERREFS,0)
+}

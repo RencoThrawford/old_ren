@@ -1,0 +1,149 @@
+@name renKeyLib
+@persist [RenKL_VERSION]:string [RenKL_KEYS]:table
+@model models/props_c17/computer01_keyboard.mdl
+@autoupdate on
+#[
+E2 Library By:
+    Renco - Everything
+    Fizzles - Alpha Tester
+
+!!!!!
+DO-NOT RE-DISTRIBUTE!
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+A common library of keybinds, any changes made here should effect any vehicle you have made
+
+
+
+//////////VERSION LOG\\\\\\\\\\
+V0.0.0 (10-12-20) - Initial Development
+V1.0.0 (11-29-20) - All keys implemented
+V1.0.1 (12-13-20)
+    [FIXED] Fixed include not functioning properly
+V1.0.2 (01-09-21)
+    [ADDED] Added key(s) for Hover Mobility
+V1.0.3 (01-14-21)
+    [ADDED] Added key for toggling fuel for Mobility
+V1.0.4 (01-17-21)
+    [ADDED] Added keys Aux1 and Aux2 for optics
+
+
+
+//////////TO-DO\\\\\\\\\\
+
+/////DONE\\\\\
+]#
+
+
+#//////////VARIABLES\\\\\\\\\#
+RenKL_VERSION = "V1.0.4"
+
+#//////////INIT\\\\\\\\\\#
+RenKL_KEYS = table()
+
+
+
+#//////////KEYS\\\\\\\\\\#
+#/////GLOBAL KEYS\\\\\#
+#Safety switch, also used for other things than safety
+RenKL_KEYS["SAFTEY",string] = "r" #Default: "r"
+
+#View switch, toggles between first and third person usually
+RenKL_KEYS["VIEW_SWITCH",string] = "v" #Default: "v"
+
+
+#/////MOBILITY KEYS\\\\\#
+#Hold the safety then press this key to turn on/off the engine
+RenKL_KEYS["IGNITION",string] = "enter" #Default: "enter"
+
+#Hold the safety and this key to honk
+RenKL_KEYS["HORN",string] = "f" #Default: "f"
+
+#Toggles on/off mouse steering
+RenKL_KEYS["TOGGLE_MOUSE",string] = "m" #Default: "m"
+
+#Toggles on/off throttle locking
+RenKL_KEYS["TOGGLE_THROTTLE_LOCK",string] = "pageup" #Default: "pageup"
+
+#Toggles on/off fuel
+RenKL_KEYS["TOGGLE_FUEL",string] = "rcontrol" #Default: "rcontrol"
+
+#Generic movement keys
+RenKL_KEYS["FORWARD",string]  = "w" #Default: "w"
+RenKL_KEYS["BACKWARD",string] = "s" #Default: "s"
+RenKL_KEYS["LEFT",string]     = "a" #Default: "a"
+RenKL_KEYS["RIGHT",string]    = "d" #Default: "d"
+#Saftey + Breaks will toggle parking breaks without turning off the engine and freezing the vehicle
+RenKL_KEYS["BREAKS",string]   = "space" #Default: "space"
+
+
+#/////HOVER MOBILITY KEYS\\\\\#
+RenKL_KEYS["DRIFT_ASSIST",string] = "y" #Default: "y"
+
+
+#/////OPTICS KEYS\\\\\#
+#Switches between day/night/backup aimers
+RenKL_KEYS["SWITCH_AIMER",string] = "t" #Default: "t"
+
+#Lases the target
+RenKL_KEYS["LASE",string] = "mouse_5" #Default: "mouse_5"
+
+#Toggles on/off parabolic mode
+RenKL_KEYS["TOGGLE_PARA",string] = "g" #Default: "g"
+
+#???
+RenKL_KEYS["TOGGLE_BARR",string] = "b" #Default: "b"
+
+#Switches between all of the different aim sources
+RenKL_KEYS["SOURCE_CYCLE",string] = "i" #Default: "i"
+
+#Raise/lower the white flag
+RenKL_KEYS["FLAG",string] = "y" #Default: "y"
+
+#Shoot off flares/smoke or somthing
+RenKL_KEYS["DEPLOY_COUNTER",string] = "lalt" #Default: "lalt" 
+
+#Begins an iff interrogation of the aimed at target
+RenKL_KEYS["INTERROGATE",string] = "mouse_middle" #Default: "mouse4"
+
+#Auxillary outputs for stuff
+RenKL_KEYS["AUX_1",string] = "lbracket" #Default: "lbracket"
+RenKL_KEYS["AUX_2",string] = "rbracket" #Default: "rbracket"
+
+
+#/////TURRET KEYS\\\\\#
+#Toggles on/off the turret
+RenKL_KEYS["TOGGLE_TURRET",string] = "backspace" #Default:   "backspace"
+
+#Switches to the next gun if any
+RenKL_KEYS["NEXT_WEAPON",string]   = "mouse_right" #Default: "mouse_right"
+
+
+
+#/////MAP KEYS\\\\\#
+#Generic movement keys
+RenKL_KEYS["MAP_UP",string]    = "up"       #Default: "up"
+RenKL_KEYS["MAP_DOWN",string]  = "down"     #Default: "down"
+RenKL_KEYS["MAP_LEFT",string]  = "left"     #Default: "left"
+RenKL_KEYS["MAP_RIGHT",string] = "right"    #Default: "right"
+
+#Allows the cursor to move faster when held
+RenKL_KEYS["MAP_SPEED",string] = "rcontrol" #Default: "rcontrol"
+
+
+#/////COVER KEYS\\\\\#
+#Toggles the cover
+RenKL_KEYS["COVER_TOGGLE",string] = "h" #Default: "h"
+
+
+#/////SPECTRE KEYS\\\\\#
+#Switches between missile guidance modes
+RenKL_KEYS["GUIDANCE_SWITCH",string] = "o" #Default: "o"
+
+
+#/////AUTO SUSPENSION\\\\\#
+RenKL_KEYS["SELECT",string]  = "e" #Default: "e"
+RenKL_KEYS["SPECIAL",string] = "mouse_right" #Default: "mouse_right"

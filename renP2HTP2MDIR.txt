@@ -1,0 +1,88 @@
+@name renPac2HoloToProp2MeshDropInReplacement
+@persist [HT CT]:table
+@trigger none
+
+#P2M Data Structure - Holos; table(Index 1,LocalEntity 2,ParentEntity 3,ScaleType 4,Pos 5,Ang 6,Scale 7,Model 8,Material 9,Color 10,Skin 11)
+#P2M Data Structure - Clips; table(Index 1,ClipIndex 2,Pos 3,Dir 4)
+
+    function void loadContraption()
+    {
+        #Create arrays used to separate each colour
+        P2MCubes = array()
+        P2MParents = array()
+        P2MColors = array()
+
+        #ifdef entity:p2mBuild()
+            #Go through each holo table
+            for(M=1,HT:count())
+            {
+                local CurMesh = HT[M,table]
+                local Cube = noentity()
+
+                #Searching for the cube that matches the color and parent
+                for(Cu=1,P2MCubes:count())
+                {
+                    if((P2MColors[Cu,vector4] == CurMesh[10,vector4]) & (P2MParents[Cu,entity] == CurMesh[3,entity])) {Cube = P2MCubes[Cu,entity] break}
+                }
+
+                #We didnt find one, create one and update the arrays
+                if(!Cube:isValid())
+                {
+                    local Local = CurMesh[2,entity]
+                    Cube = p2mCreate(Local:pos(),Local:angles())
+                    P2MCubes:pushEntity(Cube)
+                    P2MParents:pushEntity(CurMesh[3,entity])
+                    Cube:parentTo(CurMesh[3,entity])
+                    Cube:setMaterial(CurMesh[9,string])
+                    P2MColors:pushVector4(CurMesh[10,vector4])
+                    Cube:setColor(CurMesh[10,vector4])
+                }
+
+                #Building an array of clips
+                local CurClips = array()
+                for(C=1,CT:count())
+                {
+                    local CurClip = CT[C,table]
+                    if(CurMesh[1,number] == CurClip[1,number]) {for(CL=1,CurClip:count()) {if(CurClip[CL,vector]:length()) {CurClips:pushVector(CurClip[CL,vector])}}}
+                }
+
+                #Push the model
+                local Pos = Cube:toLocal(CurMesh[2,entity]:toWorld(CurMesh[5,vector]))
+                local Ang = Cube:toLocal(CurMesh[2,entity]:toWorld(CurMesh[6,angle]))
+                if(CurClips:count()) {Cube:p2mPushModel(CurMesh[8,string],Pos,Ang,CurMesh[7,vector],0,1,CurClips)}
+                else{Cube:p2mPushModel(CurMesh[8,string],Pos,Ang,CurMesh[7,vector],0,1)}
+            }
+        #else
+            hint("This server dosen't have Prop 2 Mesh, unable to build mesh!",5.5)
+        #endif
+    
+        foreach(K,Cube:entity = P2MCubes) {Cube:p2mBuild()}
+        CoreStatus = "InitPostSpawn"
+        SpawnStatus = ""
+    }
+
+#[You'll need to use this one in single player to use the command sbox_E2_maxPropsPerSecond 1000]#
+    function void loadContraption()
+    {
+        for(P=1,HT:count())
+        {
+            local CurHolo = HT[P,table]
+            local CurProp = propSpawn(CurHolo[8,string],CurHolo[2,entity]:toWorld(CurHolo[5,vector]),1)
+            CurProp:setAng(CurHolo[2,entity]:toWorld(CurHolo[6,angle]))
+            CurProp:setMaterial(CurHolo[9,string])
+            CurProp:setColor(CurHolo[10,vector4])
+            CurProp:setSkin(CurHolo[11,number])
+            
+            for(C=1,CT:count())
+            {
+                local CurClip = CT[C,table]
+                if(CurHolo[1,number] == CurClip[1,number])
+                {
+                    CurProp:addClip(CurClip[3,vector],CurClip[4,vector],0)
+                }
+            }
+        }
+        
+        CoreStatus = "InitPostSpawn"
+        SpawnStatus = ""
+    }

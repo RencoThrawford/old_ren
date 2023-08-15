@@ -1,0 +1,290 @@
+@name renEasingsLib
+@persist [RenEL_CONST1 RenEL_CONST2 RenEL_CONST3 RenEL_CONST4 RenEL_CONST5 RenEL_CONSTN1 RenEL_CONSTD1]:number [RenEL_VERSION]:string
+@autoupdate on
+#[
+E2 Library By:
+    Renco - Everything
+
+!!!!!
+RE-DISTRIBUTE I GUESS
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+This library contains a number of different easings to make your holo animated things look more natural
+
+
+
+//////////VERSION LOG\\\\\\\\\
+V0.0.0 (10-14-20) - Initial Devlopment
+V1.0.0 (10-28-20) - All easings implemented
+
+
+
+//////////NOTES\\\\\\\\\\
+/////EASING INDEX\\\\\
+In, Out, InOut
+1,2,3 - Sine; 4,5,6 - Cubic; 7,8,9 - Quint; 10,11,12 - Circ; 13,14,15 - Elastic
+16,17,18 - Quad; 19,20,21 - Quart; 22,23,24 - Expo; 25,26,27 - Back; 28,29,30 - Bounce
+
+
+
+//////////TO-DO\\\\\\\\\\
+Utilize: https://easings.net/
+/////DONE\\\\\#
+]#
+
+RenEL_CONST1 = 1.70158
+RenEL_CONST2 = RenEL_CONST1 * 1.525
+RenEL_CONST3 = RenEL_CONST1 + 1
+RenEL_CONST4 = (2 * pi()) / 3
+RenEL_CONST5 = (2 * pi()) / 4.5
+RenEL_CONSTN1 = 7.5625
+RenEL_CONSTD1 = 2.75
+
+RenEL_VERSION = "V1.0.0"
+
+
+
+#//////////FUNCTIONS\\\\\\\\\\#
+#[This function changes the rate of change of a parameter over time, this particular function is if you want the user to change what easing to use
+Inputs:
+    LastReturn [ARRAY] - The array the function last returned
+    Ease      [STRING] - The name of the ease you wish to use
+
+Output:
+    [NUMBER] - The value you use for the animation
+]#
+function number renELEase(LastReturn:array,Ease:string)
+{
+    return LastReturn
+}
+
+function number renELInSine(Progress:number)
+{
+    return 1 - cos((Progress * pi())/2)
+}
+
+function number renELOutSine(Progress:number)
+{
+    return 1 - sin((Progress * pi())/2)
+}
+
+function number renElInOutSine(Progress:number)
+{
+    return -(cos(pi() * Progress)-1)/2
+}
+
+function number renELInCubic(Progress:number)
+{
+    return Progress^3
+}
+
+function number renELOutCubic(Progress:number)
+{
+    return 1 - (1-Progress)^3
+}
+
+function number renELInOutCubic(Progress:number)
+{
+    local Return = 0
+
+    if(Progress < 0.5) {Return = Progress^3}
+    else{Return = ((-2*Progress+2)^3)/2}
+
+    return Return
+}
+
+function number renELInQuint(Progress:number)
+{
+    return Progress^5
+}
+
+function number renELOutQuint(Progress:number)
+{
+    return 1 - (1-Progress)^5
+}
+
+function number renELInOutQuint(Progress:number)
+{
+    local Return = 0
+
+    if(Progress < 0.5) {Return = (16*(Progress^5))}
+    else{Return = (1 - (-2 * (Progress+2))^5)/2}
+
+    return Return
+}
+
+function number renELInCirc(Progress:number)
+{
+    return 1 - sqrt(1-(Progress^2))
+}
+
+function number renELOutCirc(Progress:number)
+{
+    return sqrt(1-((Progress-1)^2))
+}
+
+function number renELInOutCirc(Progress:number)
+{
+    local Return = 0
+
+    if(Progress < 0.5) {Return = (1 - sqrt(1-((2*Progress)^2)))/2}
+    else {Return = (sqrt(1 - ((-2 * Progress + 2)^2)+1))/2}
+
+    return Return
+}
+
+function number renELInElastic(Progress:number)
+{
+    local Return = 0
+
+    if(Progress == 0) {Return = 0}
+    elseif(Progress == 1) {Return = 1}
+    else {Return = (2^(10*Progress-10))*sin((Progress*10-10.75)*RenEL_CONST4)}
+
+    return Return
+}
+
+function number renELOutElastic(Progress:number)
+{
+    local Return = 0
+
+    if(Progress == 0) {Return = 0}
+    elseif(Progress == 1) {Return = 1}
+    else {Return = (2&(-10*Progress))*sin((Progress*10-0.75)*RenEL_CONST4)+1}
+
+    return Return
+}
+
+function number renELInOutElastic(Progress:number)
+{
+    local Return = 0
+
+    if(Progress == 0) {Return = 0}
+    elseif(Progress == 1) {Return = 1}
+    elseif(Progress < 0.5) {Return = -((2^(20 * Progress - 10)) * sin((20 * Progress - 11.125)*RenEL_CONST5))/2}
+    else{Return = (2^(-20*Progress+10))*sin((20*Progress-11.125)*RenEL_CONST5)/2+1}
+
+    return Return
+}
+
+function number renELInQuad(Progress:number)
+{
+    return Progress^2
+}
+
+function number renELOutQuad(Progress:number)
+{
+    return 1 - (1 - Progress) * (1 - Progress)
+}
+
+function number renInOutQuad(Progress:number)
+{
+    local Return = 0
+
+    if(Progress < 0.5) {Return = 2*(Progress^2)}
+    else {Return = 1 - ((-2*Progress+2)^2)/2}
+
+    return Return
+}
+
+function number renELInQuart(Progress:number)
+{
+    return Progress^4
+}
+
+function number renELOutQuart(Progress:number)
+{
+    return 1 - ((1-Progress)^4)
+}
+
+function number renELInOutQuart(Progress:number)
+{
+    local Return = 0
+
+    if(Progress < 0.5) {Return = 8 * (Progress^4)}
+    else{Return = (1-((-2 * Progress + 2)^4))/2}
+
+    return Return
+}
+
+function number renELInExpo(Progress:number)
+{
+    local Return = 0
+
+    if(Progress == 0) {Return = 0}
+    else{Return = 2^(10*Progress-10)}
+
+    return Return
+}
+
+function number renELOutExpo(Progress:number)
+{
+    local Return = 0
+
+    if(Progress == 1) {Return = 1}
+    else {Return = 1 - (2^(-10*Progress))}
+
+    return Return
+}
+
+function number renELInOutExpo(Progress:number)
+{
+    local Return = 0
+
+    if(Progress == 0) {Return = 0}
+    elseif(Progress == 1) {Return = 1}
+    elseif(Progress < 0.5) {Return = (2^(20*Progress-10))/2}
+    else{Return = (2-(2^(-20*Progress+10)))/2}
+
+    return Return
+}
+
+function number renELInBack(Progress:number)
+{
+    return (RenEL_CONST3 * Progress * Progress * Progress) - (RenEL_CONST1 * Progress * Progress)
+}
+
+function number renELOutBack(Progress:number)
+{
+    return 1 + RenEL_CONST3 * (Progress-1^3) + RenEL_CONST1 * (Progress-1^2)
+}
+
+function number renELInOutBack(Progress:number)
+{
+    local Return = 0
+
+    if(Progress < 0.5) {Return = ((2*Progress^2)*((RenEL_CONST2+1)*2*Progress-RenEL_CONST2))/2}
+    else{Return = ((2*Progress-2^2)*((RenEL_CONST2+1)*(Progress*2-2)+RenEL_CONST2)+1)/2}
+
+    return Return
+}
+
+function number renELInBounce(Progress:number)
+{
+    return 1 - renELOutBounce(1-Progress)
+}
+
+function number renELOutBounce(Progress:number)
+{
+    local Return = 0
+
+    if(Progress < (1/RenEL_CONSTD1)) {Return = RenEL_CONSTN1 * Progress * Progress}
+    elseif(Progress < (2/RenEL_CONSTD1)) {Return = RenEL_CONSTN1 * (Progress - (1.5/RenEL_CONSTD1))*Progress + 0.75}
+    elseif(Progress < (2.5 / RenEL_CONSTD1/0)) {Return = RenEL_CONSTN1 * (Progress - (2.25/RenEL_CONSTD1))*Progress + 0.9375}
+    else{Return = RenEL_CONSTN1 * (Progress - (2.625/RenEL_CONSTD1))*Progress + 0.984375}
+
+    return Return
+}
+
+function number renELInOutBounce(Progress:number)
+{
+    local Return = 0
+
+    if(Progress < 0.5) {Return = (1 - renELOutBounce(1 - 2 * Progress)/2)}
+    else(Return = renELOutBounce(2*Progress-1)/2)
+
+    return Return
+}

@@ -1,0 +1,125 @@
+@name renZTFlag
+@persist [VERSION]:string
+#[
+#E2 By:
+    Renco - Everything
+
+!!!!!
+DO NOT RE-DISTRIBUTE
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+The official flag of ZineTech Inc.
+
+
+
+//////////VERSION LOG\\\\\\\\\
+V0.0.0 (10-23-20) - Initial Devlopment
+V1.0.0 (10-23-20) - Functionally Complete
+V1.0.1 (10-29-20) -
+    [CHANGED] Updated camoing to support renHCL V1.0.2
+    [ADDED] Added material options for renHCL V1.0.2
+V1.0.2 (12-26-20) -
+    [FIXED] Fixed undocumented issues
+    [ADDED] Added version name set
+
+
+
+//////////TO-DO\\\\\\\\\\
+Full logo?
+
+/////DONE\\\\\
+]#
+
+
+#//////////INITIALIZATION\\\\\\\\\\#
+#Reset the E2 if we have been duped or the dupe has finished spawning
+if (duped()|dupefinished()) {reset()}
+
+#The Future, Today!
+if(first())
+{
+    #/////SETTINGS\\\\\#
+    #//CAMO\\#
+    #Changes the colour and default material of the backplate
+    local CamoACol = "teal" #Default: "red"
+    local CamoAMat = "models/props_debris/plasterwall034a" #Default: "models/props_debris/plasterwall034a"
+
+    #Changes the colour and default material of the lettering
+    local CamoBCol = "red" #Default: "yellow"
+    local CamoBMat = "models/props_debris/plasterwall040c" #Default: "models/props_debris/plasterwall040c"
+
+
+    #//SCALING\\#
+    #Changes the scale of the whole thing
+    local Scale = 1 #Default: 1
+
+    #Changes the thickness of the whole thing
+    local Thickness = 1 #Default: 1
+
+
+    #//MISC\\#
+    #You can change the index at which holograms start to spawn at here
+    local Index = 0 #Default: 0
+
+
+
+    #/////LIBRARIES\\\\\#
+    #include "renHoloCamoLib"
+
+
+
+    #/////HOLOGRAMS\\\\\#
+    local CamoA = array()
+    local CamoB = array()
+    #Backplate
+    holoCreate(Index)                        #Create a hologram to the Index number set above
+    holoAng(Index,entity():toWorld(ang(90,0,0))) #Set the hologram's angle to 90 relative to the world
+    holoScale(Index,vec(0.1*Thickness,2.1,1.3)*Scale) #Set the hologram's scale
+    holoParent(Index,entity())  #Parent the hologram to the Chip entity
+    CamoA:pushNumber(Index) #Put the index number into an array, for use with the setCamo function
+    Index++                 #Increase the Index for the next hologram
+
+    #Z
+    holoCreate(Index)
+    holoModel(Index,"models/sprops/misc/alphanum/alphanum_z.mdl")
+    holoAng(Index,entity():toWorld(ang(0,90,90)))
+    holoPos(Index,entity():toWorld(vec(0,6.3,0)*Scale))
+    holoScale(Index,vec(1,0.5*Thickness,1)*Scale)
+    holoParent(Index,entity())
+    CamoB:pushNumber(Index)
+    Index++
+
+    #ZTail
+    holoCreate(Index)
+    holoModel(Index,"models/sprops/misc/alphanum/alphanum_underscore.mdl")
+    holoAng(Index,entity():toWorld(ang(0,90,90)))
+    holoPos(Index,entity():toWorld(vec(6.6,-4.45,0)*Scale))
+    holoScale(Index,vec(1.15,0.5*Thickness,1.50)*Scale)
+    holoParent(Index,entity())
+    CamoB:pushNumber(Index)
+    Index++
+
+    #T
+    holoCreate(Index)
+    holoModel(Index,"models/sprops/misc/alphanum/alphanum_t.mdl")
+    holoAng(Index,entity():toWorld(ang(0,90,90)))
+    holoPos(Index,entity():toWorld(vec(0,-5,0)*Scale))
+    holoScale(Index,vec(1,0.5*Thickness,1)*Scale)
+    holoParent(Index,entity())
+    CamoB:pushNumber(Index)
+
+
+
+    #/////FINALIZE\\\\\#
+    #Version
+    VERSION = "V1.0.2"
+    setName("renZTFlag "+VERSION)
+
+    #//HOLO CAMO\\#
+    #Set the color and or textures of the holograms we've just created
+    CamoA:renHCLHolo(CamoACol,CamoAMat)
+    CamoB:renHCLHolo(CamoBCol,CamoBMat)
+}

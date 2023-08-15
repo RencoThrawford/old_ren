@@ -1,0 +1,272 @@
+@name renDrone
+@inputs [MSGBUS]:table #Normal Inputs
+@persist [MOVEMENT_FREQUENCY AUTOPILOT_FREQUENCY]:number #Frequencies
+@persist [Gunner]:entity #MSGBUS Inputs
+@persist [Target]:vector #MSGBUS Outputs
+@outputs [DesiredYawVel]:number [DesiredDirVel]:vector #"Runtime" Variables
+@persist [LEVERAGE MASS CAMREF]:number [VERSION]:string [ROTORS]:array [MANUAL]:table #Global Variables
+@persist #User Settings
+@trigger [MSGBUS]
+@model models/sprops/cuboids/height12/size_2/cube_24x36x12.mdl
+#[
+E2 By:
+    Renco - Nearly Everything
+    Red - MSGBUS, Ideas
+
+!!!!!
+REALLY DO-NOT RE-DISTRIBUTE!
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+This is a little drone used for artillery spotting apparently illegal in ACF 3
+
+
+
+//////////VERSION LOG\\\\\\\\\\
+V0.0.0 (01-01-21) Initial Development
+V0.0.1 (01-01-21)
+    [ADDED] Created hologram model for models/sprops/cuboids/height12/size_2/cube_24x36x12.mdl
+    [ADDED] operatorNotify(string); Notifies someone of a message
+    [ADDED] operatorTell(string); Tells someone of a message
+    [ADDED] Added basic chat commands: help, manual, reset, version
+V0.0.2 (01-02-21)
+    [ADDED] Added basic movement code
+
+
+
+//////////MSGBUS\\\\\\\\\\
+/////MSGBUS INPUTS\\\\\
+GUNNER [ENTITY] - Gunner controlling armament
+
+/////MSGBUS OUTPUTS\\\\\
+DRONE_TARGET [VECTOR3] - Aimpos from spotting drone
+]#
+
+
+#//////////INITIALIZATION\\\\\\\\\\#
+#Reset the E2 if we have been duped or the dupe has finished spawning
+if(duped()|dupefinished()) {reset()}
+
+if(first())
+{
+    #/////SETTINGS\\\\\#
+    #//MISC\\#
+    #This sets what index the holograms will start to spawn at
+    local Index = 0 #Default: 0
+
+
+
+    #/////INITIALIZE VARIABLES\\\\\#
+    MOVEMENT_FREQUENCY = 50 #Default: 50
+    AUTOPILOT_FREQUENCY = 75 #Default: 75
+    #MANUAL ENTRIES
+    MANUAL = table()
+    MANUAL["help",string] = "Provides a list of commands."
+    MANUAL["manual",string] = "Provides extra details about a command. <COMMAND>"
+    MANUAL["reset",string] = "Resets the E2."
+    MANUAL["version",string] = "Prints out version details into console."
+
+    LEVERAGE = entity():inertia():length()
+    
+    MASS = 10
+
+
+
+    #/////HOLOGRAMS\\\\\#
+    switch(entity():model())
+    {
+        case "models/sprops/cuboids/height12/size_2/cube_24x36x12.mdl",
+            #Body
+            holoCreate(Index,entity():toWorld(vec(0)),vec(1),entity():toWorld(ang(0)),vec4(255),"models/sprops/cuboids/height06/size_1/cube_6x30x6.mdl")
+            holoParent(Index,entity())
+            Index++
+
+            #Rotor Assemblies
+            for(A=1,4)
+            {
+                local Rears = -inrange(A,3,4)+inrange(A,1,2)
+                local Rights = -((A==1)|(A==3))+((A==2)|(A==4))
+
+                #Rotor Stem
+                holoCreate(Index,entity():toWorld(vec(9.7*Rears,4.4*Rights,-0.6)),vec(1),entity():toWorld(ang(79,90*Rights,0)),vec4(255),"models/sprops/cylinders/size_1/cylinder_1_5x12.mdl")
+                holoParent(Index,entity())
+                Index++
+
+                #Motor Rotor
+                holoCreate(Index,entity():toWorld(vec(9.8*Rears,10.4*Rights,-3.1)),vec(1,1,0.89),entity():toWorld(ang(0,-45*A,0)),vec4(255),"models/mechanics/various/211.mdl")
+                holoParent(Index,entity())
+                Index++
+
+                #Rotor Spindle
+                holoCreate(Index,entity():toWorld(vec(9.7*Rears,10.3*Rights,3.5)),vec(0.54),entity():toWorld(ang(0,90,0)),vec4(255),"models/sprops/cylinders/size_1/cylinder_1_5x6.mdl")
+                holoParent(Index,entity())
+                Index++
+
+                #Rotor Rotor
+                holoCreate(Index,entity():toWorld(vec(9.7*Rears,10.3*Rights,4.3)),vec(0.45),entity():toWorld(ang(90,random(180),0)),vec4(255),"models/sprops/trans/air/prop_2b_s.mdl")
+                holoParent(Index,entity())
+                ROTORS:pushNumber(Index)
+                Index++
+            }
+
+            #Camera Mount
+            holoCreate(Index,entity():toWorld(vec(0,0,-2.7)),vec(1),entity():toWorld(ang(0,0,-180)),vec4(255),"models/xqm/button1.mdl")
+            holoParent(Index,entity())
+            Index++
+
+            #Camera Ball
+            holoCreate(Index,entity():toWorld(vec(0,0,-4.5)),vec(0.25),entity():toWorld(ang(0)),vec4(255),"hq_sphere")
+            holoParent(Index,entity())
+            CAMREF = Index
+            local CamBallRef = holoEntity(Index)
+            Index++
+
+            #Camera Camera
+            holoCreate(Index,CamBallRef:toWorld(vec(1,-0.4,-0.92)),vec(0.35),CamBallRef:toWorld(ang(0)),vec4(255),"models/maxofs2d/camera.mdl")
+            holoParent(Index,CAMREF)
+            holoClipEnabled(Index,1,1)
+            holoClipEnabled(Index,2,1)
+            holoClip(Index,1,vec(0.25,0,0),vec(1,0,0),0)
+            holoClip(Index,2,vec(0,-0.5,0),vec(0,1,0),0)
+            Index++
+            
+            entity():setAlpha(0)
+            entity():setMass(MASS)
+        break
+    }
+
+
+
+    #/////FUNCTIONS\\\\\#
+    #//MSGBUS\\#
+    #[Updates internal things with stuff from the bus
+    ]#
+    function void msgBusIn()
+    {
+        if(->MSGBUS)
+        {
+            Gunner = MSGBUS["GUNNER",entity]
+        }
+    }
+
+    #[Updates bus things with stuff from the internal stuff.
+    ]#
+    function void msgBusOut()
+    {
+        if(->MSGBUS)
+        {
+            MSGBUS["DRONE_TARGET",vector] = Target
+        }
+    }
+
+    #//MISC\\#
+    #[Notifies someone of a message
+    Inputs:
+        Message [STRING] - The message that will be notified
+    ]#
+    function void operatorNotify(Message:string)
+    {
+        hint("[renDrone] "+Message,5.5)
+    }
+
+    #[Tells somone a message
+    Inputs:
+        Message [STRING] - The message that will be told
+    ]#
+    function void operatorTell(Message:string)
+    {
+        print("[renDrone] "+Message)
+    }
+
+
+
+    #/////FINALIZE\\\\\#
+    #RUNONS
+    runOnChat(1)
+
+    #//VERSION\\#
+    VERSION = "0.0.1"
+    setName("renDrone "+VERSION)
+
+    #//FINALIZE MSGBUS\\#
+    #Push the name of this E2 to the bus
+    MSGBUS["NODE_NAMES",array]:pushString(entity():getName())
+    msgBusIn()
+    msgBusOut()
+    timer("movement",MOVEMENT_FREQUENCY)
+    timer("autopilot",AUTOPILOT_FREQUENCY)
+}
+
+elseif(inputClk())
+{
+    msgBusIn()
+}
+
+elseif(chatClk(owner()))
+{
+    local Said = owner():lastSaid():lower()
+    local Split = Said:explode(" ")
+    local Token = Split:string(1)
+    local Command = Split:string(2)
+    local Arg1 = Split:string(3)
+
+    if(Token == "drone")
+    {
+        hideChat(1)
+
+        switch(Command)
+        {
+            case "help",
+                operatorNotify("Commands: help, manual, reset, version.")
+            break
+
+            case "manual",
+                if(MANUAL:exists(Arg1)) {operatorTell(Arg1+": "+MANUAL[Arg1,string])}
+                else{operatorNotify("No manual entry found for "+Arg1+".")}
+            break
+
+            case "reset",
+                operatorNotify("Resetting...")
+                reset()
+            break
+
+            case "version",
+                operatorTell(VERSION)
+            break
+            
+            default,
+                operatorNotify("Command "+Command+" not found, please use help for a list of commands.")
+            break
+        }
+    }
+}
+
+elseif(clk("movement"))
+{
+    timer("movement",MOVEMENT_FREQUENCY)
+    
+    local Force = (clamp(entity():toWorldAxis(-DesiredDirVel)-entity():vel(),-vec(10),vec(10))*MASS)+vec(0,0,gravity()/1.8)
+    
+    applyForce(Force)
+    
+    local LocalForce = entity():toLocalAxis(Force)
+    local Stab = (entity():angles()-ang(LocalForce:x()/3,0,-LocalForce:y()/3))*5
+    
+    local DesiredAngVel = ang(Stab:pitch(),DesiredYawVel,Stab:roll())
+    
+    local AngVel = clamp(-(entity():angVel())-((DesiredAngVel)),-ang(15),ang(15)) 
+    applyAngForce((AngVel*LEVERAGE)*MASS)
+}
+
+elseif(clk("autopilot"))
+{
+    timer("autopilot",AUTOPILOT_FREQUENCY)
+    
+    local Vec = owner():toWorld(vec(0,50,100))
+    
+    DesiredYawVel = entity():bearing(Vec)*2
+    
+    DesiredDirVel = entity():toLocalAxis(entity():pos()-Vec)
+}

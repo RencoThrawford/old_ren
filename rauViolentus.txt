@@ -1,0 +1,307 @@
+@name rauViolentus
+@inputs
+@outputs [MSGBUS RAUBUS]:table #Generic Outputs
+@persist [Contacts]:table #RAUBUS Outputs
+@persist [AiEnabled MobilityEnabled WeaponsEnabled FollowingEnabled ResupplyEnabled]:number [SupplyPos]:vector #"Runtime" Variables
+@persist [ACTIVATIONS]:array [MANUAL CLASSES]:table #Global Variables
+@persist [CONTACTCHECK]:number [NAME TYPE CLASS]:string [ENGAGEMENTDIST COVERDIST]:vector2 #User Settings
+@trigger none
+#[
+E2 By:
+    Renco - Nearly everything
+    Red - General bus idea, MSGBUS
+
+!!!!!
+REALLY DO-NOT RE-DISTRIBUTE!
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+This is the brains of the operation, handles pathfinding, target management, and more
+
+
+
+//////////VERSION LOG\\\\\\\\\\
+V0.0.0 (11-10-20) - Initial Development
+V0.0.1 (11-10-20) -
+    [ADDED] Chat commands: man, hel, ver, res, scr, tog, mob, wep, fol, rsu, fou, pat, sta, sup
+
+
+
+//////////TO-DO\\\\\\\\\\
+For things like desginated supplies, push the supply position to the mobility targets when we go there
+    We're likely not able to get close enough on path finding alone
+Dedicated supply functionality?
+    Respond to position msg with 'Supply me' or somthing
+React and prioritize targets based on damage recieved
+    Make supply and scouts run away when damaged?
+    When resupplying run away when damaged?
+Find decent model for this E2 (Big computery thing)
+
+/////DONE\\\\\
+]#
+
+
+#//////////INITIALIZATION\\\\\\\\\\#
+#Reset the E2 if we have been duped or the dupe has finished spawning
+if(duped()|dupefinished()) {reset()}
+
+#It will never stop
+if(first())
+{
+    #/////SETTINGS\\\\\#
+    #The name of your vehicle/thing, mostly used for rIFFLe
+    NAME = "Violentus" #Default: "Violentus"
+
+    #Define what type of thing this is (GRN, NAV, AIR, STA), changes the path set the pathfinding will use if applicable
+    #GRN (Ground; tanks, cars), NAV (Naval; boats, submarines?), AIR (Air; Helicopters, VTOL's), STA (Stationary; Emplacments, No mobility)
+    #May want to disable the approprate things in the //MISC\\ section
+    TYPE = "GRN" #Default: "GRN"
+
+    #Define what this thing will be primarily doing (ATK, ART, SCO, RES)
+    #ATK (Attack), ART (Artillery), SCO (Scout), RES (Resupplier)
+    #ATK - Patrols around the map in search of enemies, moves into range to shoot enemies, uses cover
+    #ART - Performs high-angle attacks against enemies and SCRL command, avoids enemies, uses cover
+    #SCO - Patrols around the map in search of enemies, avoids enemies
+    #RES - Patrols around the map in search of friendlies, follows friendlies until no ammo/fuel has been significantly drawn for 10s
+    CLASS = "ATK" #Default: "ATK"
+
+    #How close and far are we allowed to engage (In meters), will try to move in closer to attack if out of range
+    ENGAGEMENTDIST = vec2(0,400) #Default: vec2(0,400)
+
+    #How far we will go to cover (If any are defined)
+    COVERDIST = vec(0,150) #Default: vec2(0,150)
+
+    #How long do we check to see if a freindly is still freindly and an enemy is still alive? (In seconds)
+    CONTACTCHECK = 60 #Default: 2500
+
+
+    #//MISC\\#
+    #Turns on/off mobility by default, changable via command
+    MobilityEnabled = 1 #Default: 1
+
+    #Turns on/off weapons by default, changable via command
+    WeaponsEnabled = 1 #Default: 1
+
+    #Turns on/off friendly following by default, changable via command
+    FollowingEnabled = 0 #Default: 0
+
+    #Turns on/off automatic resupplying by default, changeable via command
+    #Defined via SCRL or debug command, only remembers one
+    ResupplyEnabled = 1 #Default: 1
+
+
+
+    #/////LIBRARIES\\\\\#
+    #include "SCRL"
+    #include "renIFFLib"
+    #include "rauPointsLib"
+
+
+
+    #/////VARIABLES\\\\\#
+    #All of our chat command manual entires
+    MANUAL = table()
+    MANUAL["man",string] = "Prints out a description of the provided command. <COMMAND>"
+    MANUAL["hel",string] = "Prints out a list of available commands."
+    MANUAL["ver",string] = "Prints out the version into chat, aswell as credits and a hash into console."
+    MANUAL["res",string] = "Resets the E2."
+    MANUAL["scr",string] = "Sets the SCRL channel and passowrd. <CHANNEL> <PASSWORD>"
+    MANUAL["tog",string] = "Toggles on/off the AI. <1/0>"
+    MANUAL["mob",string] = "Toggles on/off the mobility. <1/0>"
+    MANUAL["wep",string] = "Toggles on/off shooting. <1/0>"
+    MANUAL["fol",string] = "Toggles on/off friendly following. <1/0>"
+    MANUAL["rsu",string] = "Toggles on/off automatic resupplying. <1/0>"
+    MANUAL["fou",string] = "Prints out a list of known freind/foes, aswell as a more detailed list in console."
+    MANUAL["pat",string] = "Forces the AI to move to your position."
+    MANUAL["sta",string] = "Prints out the status of the vehicle/ai."
+    MANUAL["sup",string] = "Manually overrides the supply position to your position."
+
+    #Simply on or off
+    ACTIVATIONS = array()
+    ACTIVATIONS[0,string] = "off"
+    ACTIVATIONS[1,string] = "on"
+
+    #User-readable class names (For rIFFLe?)
+    CLASSES = table()
+    CLASSES["ATK",string] = "Attacker"
+    CLASSES["ART",string] = "Artillery"
+    CLASSES["SCO",string] = "Scout"
+    CLASSES["RES",string] = "Resupplier"
+
+
+
+    #/////FUNCTIONS\\\\\#
+    #//MISC\\#
+    #[Notifies the owner via a hint with a message of your choosing
+    Inputs:
+        Message [STRING] - The message that will be hinted
+    ]#
+    function void ownerNotify(Message:string)
+    {
+        hint("[rauViolentus] "+Message,5.5)
+    }
+
+    #[Prints into the owner's chat the message of your choosing
+    Inputs:
+        Message [STRING] - The message that will be printed
+    ]#
+    function void ownerTell(Message:string)
+    {
+        print("[rauViolentus] "+Message)
+    }
+
+    #[Prints into the owner's console the message of your choosing
+    Inputs:
+        Message [STRING]
+    ]#
+    function void ownerBug(Message:string)
+    {
+        print(_HUD_PRINTCONSOLE,"[rauViolentus] "+Message)
+    }
+
+
+
+    #/////FINALIZATION\\\\\#
+    #//MISC\\#
+    runOnChat(1)
+
+    #//VERSION\\#
+    VERSION = "V0.0.1"
+    setName("rauViolentus "+VERSION)
+}
+
+
+
+#//////////CHAT COMMANDS\\\\\\\\\\#
+elseif(chatClk(owner()))
+{
+    local Said = owner():lastSaid():lower()
+    local Split = Said:explode(" ")
+    local Token = Split:string(1)
+    local Command = Split:string(2)
+    local Arg1 = Split:string(3)
+    local Arg1Num = Arg1:toNumber()
+    local Arg2 = Split:string(4)
+    local OwnPos = owner():pos()
+
+    if(Token == "rau")
+    {
+        switch(Command)
+        {
+            #Manual, provides a description of the provided command
+            case "manual",
+            case "man",
+                if(MANUAL:exists(Arg1)) {ownerTell(Arg1+": "+MANUAL[Arg1:toNumber(),string])}
+                else{ownerTell("Command "+Arg1+" not found, please use hel for a list of available commands.")}
+            break
+
+            #Help; provides a list of usable commands
+            case "help",
+            case "hel",
+                ownerTell("Commands: man, hel, ver, res, scr, tog, mob, wep, fol, rsu, fou, pat, sta, sup.")
+            break
+
+            case "version",
+            case "ver",
+                ownerTell(VERSION)
+                ownerBug(VERSION+" By: Renco, Red; "+hashNoComments()+".")
+            break
+
+            #Reset; resets the E2
+            case "reset",
+            case "res",
+                ownerNotify("Resetting.")
+                reset()
+            break
+
+            #SCRL; sets the SCRL channel and password
+            case "scrl",
+            case "scr",
+                if(Arg1&Arg2) {scr_updateSettings(Arg1,Arg2) ownerNotify("Setting new SCRL channel settings.")}
+                else{ownerNotify("Please specify a channel and password!")}
+            break
+
+            #Toggle; toggles on/off the AI
+            case "toggle",
+            case "tog",
+                if(Arg1Num) {!AiEnabled}
+                else{AiEnabled = clamp(Arg1Num,0,1)}
+
+                ownerNotify("Toggling AI: "+ACTIVATIONS[AiEnabled,string]+".")
+            break
+
+            #Mobility; toggle on/off mobility
+            case "mobility",
+            case "mob",
+                if(Arg1Num) {!MobilityEnabled}
+                else{MobilityEnabled = clamp(Arg1Num,0,1)}
+
+                ownerNotify("Toggling Mobility: "+ACTIVATIONS[MobilityEnabled,string]+".")
+            break
+
+            #Weapons; toggle on/off weapons
+            case "weapons",
+            case "weapon",
+            case "wep",
+                if(Arg1Num) {!WeaponsEnabled}
+                else{WeaponsEnabled = clamp(Arg1Num,0,1)}
+
+                ownerNotify("Toggling Weapons: "+ACTIVATIONS[WeaponsEnabled,string]+".")
+            break
+
+            #Follow; toggles on/off following of freindlies
+            case "follow",
+            case "fol",
+                if(Arg1Num) {!FollowingEnabled}
+                else{FollowingEnabled = clamp(Arg1Num,0,1)}
+
+                ownerNotify("Toggling Friendly Following: "+ACTIVATIONS[FollowingEnabled,string]+".")
+            break
+
+            #Resupply; toggles on/off automatic resupplying
+            case "resupply",
+            case "rsu",
+                if(Arg1Num) {!ResupplyEnabled}
+                else{ResupplyEnabled = clamp(Arg1Num,0,1)}
+
+                ownerNotify("Toggling Automatic Resupplying: "+ACTIVATIONS[ResupplyEnabled,string]+".")
+            break
+
+            #Found; prints a list of everything the AI has found
+            case "found",
+            case "fou",
+                ownerNotify("Check console.")
+                ownerBug(Contacts:toString())
+            break
+
+            #Path; forces the AI to move to your aimpos
+            case "path",
+            case "pat",
+
+            break
+
+            #Status; prints out the status of the vehicle/AI
+            case "status",
+            case "sta",
+
+            break
+
+            #Supply; manually overrides the supply position to aimpos
+            case "supply",
+            case "sup",
+                SupplyPos = OwnPos
+
+                ownerNotify("Setting supply position to your position. ("+round(OwnPos)+")")
+            break
+
+            #Invalid command; tell them that.
+            default,
+                ownerNotify("Command "+Command+" not found.")
+            break
+        }
+
+        hideChat(1)
+    }
+}

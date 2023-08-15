@@ -1,0 +1,59 @@
+@name renMechLib
+@persist [RenML_VERSION]:string
+#[
+E2 Library By:
+    Renco - 
+    shadowscion - IK
+
+
+
+//////////NOTES\\\\\\\\\\
+A common library for holo parent mech thingies
+Thanks to shadowscion for his public IK (https://github.com/shadowscion/Expression2-Releases)
+
+
+
+//////////VERSION LOG\\\\\\\\\
+V0.0.0 (01-19-21) - Initial Devloplment
+
+
+
+//////////TO-DO\\\\\\\\\\
+
+/////DONE\\\\\#
+]#
+
+
+#//////////VARIABLES\\\\\\\\\#
+RenML_VERSION = "V0.0.0"
+
+
+
+#/////////FUNCTIONS\\\\\\\\\#
+
+
+#/////SHADOSCION'S FUNCTIONS\\\\\#
+#I DIDNT WRITE THESE
+#[this is our basic cosine-rule function, i'm not a math teacher so google it if you want to know how and why it does what it does
+]#
+function number icos(A,B,C)
+{
+    return acos((A^2 + B^2 - C^2) / (2*A*B))    
+}
+
+#[
+]#
+    function quat_ik(NHip, NKnee, NFoot, LengthA, LengthB,ReverseKnee:number, Base:entity, Target:vector) {
+        local Origin = holoEntity(NHip):pos()
+        local AxisLocal = Base:toLocalAxis(Target - Origin)
+
+        local AxisAngle = AxisLocal:toAngle():setRoll(-bearing(Target, Base:angles(), Origin)) #-- forward knee
+        if(ReverseKnee) {AxisAngle = AxisLocal:toAngle():setRoll(-bearing(Origin, Base:angles(), Target))} #-- reverse knee
+
+        local LengthC = min(AxisLocal:length(), LengthA + LengthB)
+        local AxisQuat = quat(AxisAngle) * qRotation(vec(0, 1, 0), 90 + icos(LengthC, LengthA, LengthB))
+        
+        holoAng(NHip, Base:toWorld(AxisQuat:toAngle()))
+        holoAng(NKnee, holoEntity(NHip):toWorld(ang(icos(LengthB, LengthA, LengthC) + 180, 0, 0)))
+        holoAng(NFoot, Base:angles())
+    }

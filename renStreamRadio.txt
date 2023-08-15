@@ -1,0 +1,902 @@
+@name renStreamRadio
+@persist [TRACKPADDING STREAMINDEX]:number [DISPLAYCOLOUR]:vector4 [TRACKS]:table #User Settings
+@persist [DISPLAY_FREQUENCY]:number #Frequencies
+@outputs [TRACKCOUNT AUTOPLAYTRACKCOUNT NUM]:number [VERSION]:string [ALPHANUM]:vector2 [AUTOPLAYTRACKS]:array [MANUAL]:table #Global Variables
+@outputs [CurVolume CurTrackIndex LastPlayTime Autoplay Random ScrollIndex]:number [Scroll]:array [AutoplayPlayed]:array [CurTrackTable]:table #"Runtime" Variables
+@model models/props_lab/reciever01d.mdl
+@autoupdate on
+#[
+E2 By:
+    Renco - Basically Everything
+    Fizzles - Alpha Tester
+
+!!!!!
+DO-NOT RE-DISTRIBUTE!
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+A retartedly heavy E2 for playing music in a couple of different ways
+
+
+
+//////////VERSION LOG\\\\\\\\\\
+V0.0.0 (11-13-20) - Initial Development
+V1.0.0 (11-13-20) -
+    [ADDED] number:updateNumeralDisplay(number); Updates a set of 3 holograms at the specified index with a number
+    [ADDED] vector2:updateAlphanumDisplay(string); Updates a variable set of holograms with a string
+    [ADDED] vector number:formatTime(); Formats seconds into hours, minutes, seconds
+    [ADDED] number:streamCreate(string,number); Creates a stream
+    [ADDED] number:streamDestroy(); Destroys a stream
+    [ADDED] number:streamVolume(number); Changes the volume of a stream
+    [ADDED] number streamMinInterval(); Returns how fast we can create streams + quater second
+    [ADDED] ownerNotify(string); Notifies the owner
+    [ADDED] ownerTell(string); Prints to the owner's chat
+    [ADDED] ownerConsole(string); Prints to the owner's console
+    [ADDED] Random and regular autoplay
+    [ADDED] Anti-spam protection
+    [ADDED] Display functionality
+V1.0.1 (12-08-20)
+    [UPDATED] Autoplay track filtering now checks if duration is > 0
+    [UPDATED] Fixed typo in man command
+    [UPDATED] Updated track padding adder with autoplay
+V1.0.2 (12-13-20) -
+    [FIXED] Numerous undocumented fixes with Fizzle's help
+V1.0.3 (12-17-20) -
+    [UPDATED] Updated volume command to report a 0-100 percentage instead of 0-1
+    [ADDED] Added track name display to standard small radio model
+    [ADDED] Added more documentation about the settings
+V1.0.4 (12-25-20)
+    [FIXED] Fixed several undocumented issues
+V1.0.5 (12-26-20)
+    [FIXED] Fixed anti-spam triggering on spawn
+V1.0.6 (01-08-21)
+    [FIXED] Fixed autoplay and random autoplay not playing tracks
+    [FIXED] Fixed sto command not stopping radio
+    [FIXED] Fixed normal radio model display not being positioned properly
+V1.0.7 (01-21-21)
+    [UPDATED] Updated streamCreate() to use two different versions of streamcore
+
+
+
+//////////TO-DO\\\\\\\\\\
+Binary search for specific song name to play
+Autoplay via artist
+Revamp track name creation to use a function
+Alphanum display special character support (',/. etc)
+
+/////DONE\\\\\
+]#
+
+
+#//////////INITIALIZATION\\\\\\\\\\#
+#Reset the E2 if we have been duped or the dupe has finished spawning
+if(duped()|dupefinished()) {reset()}
+
+#Playing music since `18
+if(first())
+{
+    #/////SETTINGS\\\\\#
+    #//DISPLAY\\#
+    #Changes the colour of the backlight
+    local BACKLIGHTCOLOUR = vec4(255,126,0,255) #Default: vec4(255,126,0,255)
+
+    #Changes the colour of the digits/letters
+    DISPLAYCOLOUR = vec4(25,25,25,200) #Default: vec4(25,25,25,200)
+
+    #Changes the material of the backlight and digits/letters
+    local DISPLAYMYATERIAL = "models/ihvtest/eyeball_l" #Default: "models/ihvtest/eyeball_l"
+
+
+    #//MISC\\#
+    #Changes the index at which the holograms start to spawn at
+    local Index = 0 #Default: 0
+
+    #Turn on low holo mode (Turns off the track name display if present) (Automatically enabled if the amount of holos you can spawn are low enough)
+    local LOWHOLO = 0
+
+    #The amount of time to add to the end of the track for autoplay modes
+    TRACKPADDING = 0.8 #Default: 0.8
+
+    #Changes what stream index this E2 will use
+    STREAMINDEX = 1 #Default: 1
+
+    #Changes the default volume, this can be changed at anytime with the vol command
+    CurVolume = 0.8 #Default: 0.8
+
+
+    #//TRACKS\\#
+    TRACKS = table() #Initilize the table
+
+    #/TRACK 00; N/A - Nothing!\#
+    TRACKS[0,table] = table()                        #Initilize the table for the table (Wow!)
+    TRACKS[0,table]["track_url",string]  = ""        #The link to the track (if your link has dl=0, replace it with raw=1 (you might have to do it anyway if it dosent have it))
+    TRACKS[0,table]["track_arti",string] = "N/A"     #The artist of the track, this will only be displayed on the name of the E2
+    TRACKS[0,table]["track_name",string] = "Nothing" #The name of the track (no special characters please), this will be displayed on the screen if you have it enabled
+    TRACKS[0,table]["track_dura",number] = 0         #The duration of the track (in seconds), set this to 0 for radio stations (Technically you dont have to if the track is a meme, but eh)
+    TRACKS[0,table]["track_type",string] = "none"    #The type of track can be none, radio, link, or meme (Autoplay will skip none, radio, and meme)
+
+    #/TRACK 01; N/A - It's My Life\#
+    TRACKS[1,table] = table()
+    TRACKS[1,table]["track_url",string]  = "https://www.dropbox.com/s/rnh70yg6b0bz7qf/It%27s%20My%20Life.mp3?dl=1"
+    TRACKS[1,table]["track_arti",string] = "N/A"
+    TRACKS[1,table]["track_name",string] = "Its My Life"
+    TRACKS[1,table]["track_dura",number] = 241
+    TRACKS[1,table]["track_type",string] = "link"
+
+    #/TRACK 02; Andy Clark - World Beater\#
+    TRACKS[2,table] = table()
+    TRACKS[2,table]["track_url",string]  = "https://www.dropbox.com/s/hwza8139o8c3sow/World%20Beater.mp3?dl=1"
+    TRACKS[2,table]["track_arti",string] = "Andy Clark"
+    TRACKS[2,table]["track_name",string] = "World Beater"
+    TRACKS[2,table]["track_dura",number] = 207
+    TRACKS[2,table]["track_type",string] = "link"
+
+    #/TRACK 03; Elton John - Bennie And The Jets\#
+    TRACKS[3,table] = table()
+    TRACKS[3,table]["track_url",string]  = "https://www.dropbox.com/s/h5tx5q78snaslut/Bennie%20And%20The%20Jets.mp3?dl=1"
+    TRACKS[3,table]["track_arti",string] = "Elton John"
+    TRACKS[3,table]["track_name",string] = "Bennie And The Jets"
+    TRACKS[3,table]["track_dura",number] = 323
+    TRACKS[3,table]["track_type",string] = "link"
+
+    #/TRACK 04; AC/DC - The Jack\#
+    TRACKS[4,table] = table()
+    TRACKS[4,table]["track_url",string]  = "https://www.dropbox.com/s/hm9zid6xahkn94a/The%20Jack.mp3?dl=1"
+    TRACKS[4,table]["track_arti",string] = "AC/DC"
+    TRACKS[4,table]["track_name",string] = "The Jack"
+    TRACKS[4,table]["track_dura",number] = 352
+    TRACKS[4,table]["track_type",string] = "link"
+
+    #/TRACK 05; Chizh & Co - Phantom\#
+    TRACKS[5,table] = table()
+    TRACKS[5,table]["track_url",string]  = "https://www.dropbox.com/s/e94n2rkfaxgwlvp/Phantom.mp3?dl=1"
+    TRACKS[5,table]["track_arti",string] = "Chizh & Co"
+    TRACKS[5,table]["track_name",string] = "Phantom"
+    TRACKS[5,table]["track_dura",number] = 224
+    TRACKS[5,table]["track_type",string] = "link"
+
+    #/TRACK 06; Vic Tyler - Bomber\#
+    TRACKS[6,table] = table()
+    TRACKS[6,table]["track_url",string]  = "https://www.dropbox.com/s/nout443c87g9kzv/Bomber.mp3?dl=1"
+    TRACKS[6,table]["track_arti",string] = "Vic Tyler"
+    TRACKS[6,table]["track_name",string] = "Bomber"
+    TRACKS[6,table]["track_dura",number] = 184
+    TRACKS[6,table]["track_type",string] = "link"
+
+    #/TRACK 07; Vic Tyler - Dawson's Christian\#
+    TRACKS[7,table] = table()
+    TRACKS[7,table]["track_url",string]  = "https://www.dropbox.com/s/4znr9vdxivo14tx/Dawson%27s%20Christian.mp3?dl=1"
+    TRACKS[7,table]["track_arti",string] = "Vic Tyler"
+    TRACKS[7,table]["track_name",string] = "Dawsons Christian"
+    TRACKS[7,table]["track_dura",number] = 270
+    TRACKS[7,table]["track_type",string] = "link"
+
+    #/TRACK 08; Styx - Blue Collar Man\#
+    TRACKS[8,table] = table()
+    TRACKS[8,table]["track_url",string]  = "https://www.dropbox.com/s/plzpne1rumcm9tn/Blue%20Collar%20Man.mp3?dl=1"
+    TRACKS[8,table]["track_arti",string] = "Styx"
+    TRACKS[8,table]["track_name",string] = "Blue Collar Man"
+    TRACKS[8,table]["track_dura",number] = 247
+    TRACKS[8,table]["track_type",string] = "link"
+
+    #/TRACK 09; Don Henley - Dirty Laundry\#
+    TRACKS[9,table] = table()
+    TRACKS[9,table]["track_url",string]  = "https://www.dropbox.com/s/p3efk4tzw73plcu/Dirty%20Laundry.mp3?dl=1"
+    TRACKS[9,table]["track_arti",string] = "Don Henley"
+    TRACKS[9,table]["track_name",string] = "Dirty Laundry"
+    TRACKS[9,table]["track_dura",number] = 337
+    TRACKS[9,table]["track_type",string] = "link"
+
+    #/TRACK 10; Tears for Fears - Everybody Wants to Rule the World\#
+    TRACKS[10,table] = table()
+    TRACKS[10,table]["track_url",string]  = "https://www.dropbox.com/s/77l0wjuxyjp0lsx/Everybody%20Wants%20To%20Rule%20The%20World.mp3?dl=1"
+    TRACKS[10,table]["track_arti",string] = "Tears for Fears"
+    TRACKS[10,table]["track_name",string] = "Everybody Wants to Rule the World"
+    TRACKS[10,table]["track_dura",number] = 251
+    TRACKS[10,table]["track_type",string] = "link"
+
+    #/TRACK 11; Peter Frampton - Do You Feel Like We Do\#
+    TRACKS[11,table] = table()
+    TRACKS[11,table]["track_url",string]  = "https://www.dropbox.com/s/ikojit88330v3vb/Do%20You%20Feel%20Like%20We%20Do.mp3?dl=1"
+    TRACKS[11,table]["track_arti",string] = "Peter Frampton"
+    TRACKS[11,table]["track_name",string] = "Do You Feel Like We Do"
+    TRACKS[11,table]["track_dura",number] = 405
+    TRACKS[11,table]["track_type",string] = "link"
+
+    #/TRACK 12; Kay Kyser - Praise the Lord and Pass the Ammunition\#
+    TRACKS[12,table] = table()
+    TRACKS[12,table]["track_url",string]  = "https://www.dropbox.com/s/oqxepvbsf2f4a85/Praise%20the%20Lord%20and%20Pass%20the%20Ammunition.mp3?dl=1"
+    TRACKS[12,table]["track_arti",string] = "Kay Kyser"
+    TRACKS[12,table]["track_name",string] = "Praise the Lord and Pass the Ammunition"
+    TRACKS[12,table]["track_dura",number] = 153
+    TRACKS[12,table]["track_type",string] = "link"
+
+    #/TRACK 13; Frank Sinatra - Blue Moon\#
+    TRACKS[13,table] = table()
+    TRACKS[13,table]["track_url",string]  = "https://www.dropbox.com/s/q21zx0gixxlxgp7/Blue%20Moon.mp3?dl=1"
+    TRACKS[13,table]["track_arti",string] = "Frank Sinatra"
+    TRACKS[13,table]["track_name",string] = "Blue Moon"
+    TRACKS[13,table]["track_dura",number] = 171
+    TRACKS[13,table]["track_type",string] = "link"
+
+    #/TRACK 14; Dion - The Wanderer\#
+    TRACKS[14,table] = table()
+    TRACKS[14,table]["track_url",string]  = "https://www.dropbox.com/s/jcomc3zvrlwk4fv/The%20Wanderer.mp3?dl=1"
+    TRACKS[14,table]["track_arti",string] = "Dion"
+    TRACKS[14,table]["track_name",string] = "The Wanderer"
+    TRACKS[14,table]["track_dura",number] = 169
+    TRACKS[14,table]["track_type",string] = "link"
+
+    #/TRACK 15; Tom Jones - It's Not Unusual\#
+    TRACKS[15,table] = table()
+    TRACKS[15,table]["track_url",string]  = "https://www.dropbox.com/s/e18l70ttcxkll85/It%27s%20Not%20Unusual.mp3?dl=1"
+    TRACKS[15,table]["track_arti",string] = "Tom Jones"
+    TRACKS[15,table]["track_name",string] = "Its Not Unusual"
+    TRACKS[15,table]["track_dura",number] = 120
+    TRACKS[15,table]["track_type",string] = "link"
+
+    #/TRACK 16; Kay Kyser - Jingle Jangle Jingle\#
+    TRACKS[16,table] = table()
+    TRACKS[16,table]["track_url",string]  = "https://www.dropbox.com/s/1ygist25rw8h01i/Jingle%20Jangle%20Jingle.mp3?dl=1"
+    TRACKS[16,table]["track_arti",string] = "Kay Kyser"
+    TRACKS[16,table]["track_name",string] = "Jingle Jangle Jingle"
+    TRACKS[16,table]["track_dura",number] = 197
+    TRACKS[16,table]["track_type",string] = "link"
+
+    #/TRACK 17; Judas Priest - Turbo Lover\#
+    TRACKS[17,table] = table()
+    TRACKS[17,table]["track_url",string]  = "https://www.dropbox.com/s/dnff3mzsukkmw6e/Turbo%20Lover.mp3?dl=1"
+    TRACKS[17,table]["track_arti",string] = "Judas Priest"
+    TRACKS[17,table]["track_name",string] = "Turbo Lover"
+    TRACKS[17,table]["track_dura",number] = 334
+    TRACKS[17,table]["track_type",string] = "link"
+
+    #/TRACK 18; Queen - My Melancholy Blues\#
+    TRACKS[18,table] = table()
+    TRACKS[18,table]["track_url",string]  = "https://www.dropbox.com/s/kyt0m92i11ma10z/My%20Melancholy%20Blues.mp3?dl=1"
+    TRACKS[18,table]["track_arti",string] = "Queen"
+    TRACKS[18,table]["track_name",string] = "My Melancholy Blues"
+    TRACKS[18,table]["track_dura",number] = 209
+    TRACKS[18,table]["track_type",string] = "link"
+
+    #/TRACK 19; Asia - Countdown To Zero\#
+    TRACKS[19,table] = table()
+    TRACKS[19,table]["track_url",string]  = "https://www.dropbox.com/s/kh0ed1xx902cp49/Countdown%20To%20Zero.mp3?dl=1"
+    TRACKS[19,table]["track_arti",string] = "Asia"
+    TRACKS[19,table]["track_name",string] = "Countdown To Zero"
+    TRACKS[19,table]["track_dura",number] = 254
+    TRACKS[19,table]["track_type",string] = "link"
+
+    #/TRACK 20; Queen - Don't Stop Me Now\#
+    TRACKS[20,table] = table()
+    TRACKS[20,table]["track_url",string]  = "https://www.dropbox.com/s/s1u9lz18prjzlib/Don%27t%20Stop%20Me%20Now.mp3?dl=1"
+    TRACKS[20,table]["track_arti",string] = "Queen"
+    TRACKS[20,table]["track_name",string] = "Dont Stop Me Now"
+    TRACKS[20,table]["track_dura",number] = 210
+    TRACKS[20,table]["track_type",string] = "link"
+
+    #/TRACK 21; Chris Remo - Space Asshole\#
+    TRACKS[21,table] = table()
+    TRACKS[21,table]["track_url",string]  = "https://www.dropbox.com/s/hs59n1l8do23k75/Space%20Asshole.mp3?dl=1"
+    TRACKS[21,table]["track_arti",string] = "Chris Remo"
+    TRACKS[21,table]["track_name",string] = "Space Asshole"
+    TRACKS[21,table]["track_dura",number] = 235
+    TRACKS[21,table]["track_type",string] = "link"
+
+    #/TRACK 22; Kerber - Manifest\#
+    TRACKS[22,table] = table()
+    TRACKS[22,table]["track_url",string]  = "https://www.dropbox.com/s/cna8btj6y3u6j66/Manifest.mp3?dl=1"
+    TRACKS[22,table]["track_arti",string] = "Kerber"
+    TRACKS[22,table]["track_name",string] = "Manifest"
+    TRACKS[22,table]["track_dura",number] = 246
+    TRACKS[22,table]["track_type",string] = "link"
+
+    #/TRACK 23; Red Vox - Vomit in the Ball Pit\#
+    TRACKS[23,table] = table()
+    TRACKS[23,table]["track_url",string]  = "https://www.dropbox.com/s/dbz3126b74t9zjd/Vomit%20In%20The%20Ball%20Pit.mp3?dl=1"
+    TRACKS[23,table]["track_arti",string] = "Red Vox"
+    TRACKS[23,table]["track_name",string] = "Vomit in the Ball Pit"
+    TRACKS[23,table]["track_dura",number] = 192
+    TRACKS[23,table]["track_type",string] = "link"
+
+    #/TRACK 24; Megadeth - You're Dead\#
+    TRACKS[24,table] = table()
+    TRACKS[24,table]["track_url",string]  = "https://www.dropbox.com/s/c73j5rzke419cdv/You%27re%20Dead.mp3?dl=1"
+    TRACKS[24,table]["track_arti",string] = "Megadeth"
+    TRACKS[24,table]["track_name",string] = "Youre Dead"
+    TRACKS[24,table]["track_dura",number] = 199
+    TRACKS[24,table]["track_type",string] = "link"
+
+
+
+    #/////INITIALIZE VARIABLES\\\\\#
+    #//FREQUENCIES\\#
+    DISPLAY_FREQUENCY = 1000 #Default: 1000
+
+    #//MANUAL\\#
+    MANUAL = table()
+    MANUAL["man",string] = "Prints out a description of the provided command. <COMMAND>"
+    MANUAL["hel",string] = "Prints out a list of available commands."
+    MANUAL["ver",string] = "Prints out the version into chat, aswell as credits and a hash into console."
+    MANUAL["res",string] = "Resets the E2."
+    MANUAL["pre",string] = "Plays the specified track number. <TRACK NUMBER>"
+    MANUAL["sto",string] = "Stops the current stream or autoplay session."
+    MANUAL["vol",string] = "Sets the volume of the current stream, and new streams. <VOLUME 0-100>"
+    MANUAL["abo",string] = "Prints out details about the currently played track, or the speicifed track. <TRACK NUMBER>"
+    MANUAL["rep",string] = "Replays the last played track."
+    MANUAL["tra",string] = "Prints the total amount of tracks and their combined time."
+    MANUAL["aut",string] = "Starts an autoplay session."
+    MANUAL["ran",string] = "Starts a random autoplay session."
+    MANUAL["ski",string] = "Skips a track in autoplay."
+
+
+    #//MISC\\#
+    TRACKCOUNT = TRACKS:count()-1
+
+    local FORBIDDENTRACKS = table()
+    FORBIDDENTRACKS["none",string]  = "none"
+    FORBIDDENTRACKS["radio",string] = "radio"
+    FORBIDDENTRACKS["meme",string]  = "meme"
+
+    #Filter out the forbidden track types, and check if duration is non-zero
+    for(T=1,TRACKCOUNT)
+    {
+        if((!FORBIDDENTRACKS:exists(TRACKS[T,table]["track_type",string]))&(TRACKS[T,table]["track_dura",number]>0)) {AUTOPLAYTRACKS:pushNumber(T)}
+    }
+
+    AUTOPLAYTRACKCOUNT = AUTOPLAYTRACKS:count()
+
+    ScrollIndex = 1
+
+
+
+    #/////HOLOGRAMS\\\\\#
+    switch(entity():model())
+    {
+        #Generic small radio
+        case "models/props_lab/reciever01d.mdl",
+            #Backlight
+            holoCreate(Index,entity():toWorld(vec(5.8,-2.7,-0.42)),vec(0.21,0.41,1),entity():toWorld(ang(90,0,0)),BACKLIGHTCOLOUR,"plane")
+            holoParent(Index,entity())
+            holoMaterial(Index,DISPLAYMYATERIAL)
+            holoDisableShading(Index,1)
+            local BacklightRef = holoEntity(Index)
+            Index++
+
+            #Line Thing
+            holoCreate(Index,BacklightRef:toWorld(vec(0.3,-0.48,0)),vec(0.1,0.02,0.29),BacklightRef:toWorld(ang(0,0,90)),DISPLAYCOLOUR,"models/sprops/misc/alphanum/alphanum_bar.mdl")
+            holoParent(Index,entity())
+            holoMaterial(Index,DISPLAYMYATERIAL)
+            holoDisableShading(Index,1)
+            holoBodygroup(Index,0,3)
+            Index++
+
+            #Left Track Number
+            holoCreate(Index,BacklightRef:toWorld(vec(-0.5,0.08,0)),vec(0.1,0.02,0.1),BacklightRef:toWorld(ang(0,-90,90)),DISPLAYCOLOUR,"models/sprops/misc/alphanum/alphanum_0.mdl")
+            holoParent(Index,entity())
+            holoMaterial(Index,DISPLAYMYATERIAL)
+            holoDisableShading(Index,1)
+            holoBodygroup(Index,0,3)
+            NUM = Index
+            Index++
+
+            #Middle Track Number
+            holoCreate(Index,BacklightRef:toWorld(vec(-0.5,0.93,0)),vec(0.1,0.02,0.1),BacklightRef:toWorld(ang(0,-90,90)),DISPLAYCOLOUR,"models/sprops/misc/alphanum/alphanum_0.mdl")
+            holoParent(Index,entity())
+            holoMaterial(Index,DISPLAYMYATERIAL)
+            holoDisableShading(Index,1)
+            holoBodygroup(Index,0,3)
+            Index++
+
+            #Right Track Number
+            holoCreate(Index,BacklightRef:toWorld(vec(-0.5,1.78,0)),vec(0.1,0.02,0.1),BacklightRef:toWorld(ang(0,-90,90)),DISPLAYCOLOUR,"models/sprops/misc/alphanum/alphanum_0.mdl")
+            holoParent(Index,entity())
+            holoMaterial(Index,DISPLAYMYATERIAL)
+            holoDisableShading(Index,1)
+            holoBodygroup(Index,0,3)
+            Index++
+
+            #Volume Bar
+            holoCreate(Index,BacklightRef:toWorld(vec(-0.66,-0.6,0)),vec(0.25,0.02,0.085),BacklightRef:toWorld(ang(0,-90,90)),DISPLAYCOLOUR,"models/sprops/misc/alphanum/alphanum_bar.mdl")
+            holoParent(Index,entity())
+            holoMaterial(Index,DISPLAYMYATERIAL)
+            holoDisableShading(Index,1)
+            holoBodygroup(Index,0,3)
+            Index++
+
+            #Track Name
+            if(!LOWHOLO)
+            {
+                Space = vec(0,0.4,0)
+                TNPos = vec(0.79,-2,0)
+                ALPHANUM = vec2(Index-1,11)
+
+                for(X=1,11)
+                {
+                    holoCreate(Index,BacklightRef:toWorld(TNPos),vec(0.05,0.02,0.05),BacklightRef:toWorld(ang(0,-90,90)),DISPLAYCOLOUR,"models/sprops/misc/alphanum/alphanum_A.mdl")
+                    holoParent(Index,entity())
+                    holoMaterial(Index,DISPLAYMYATERIAL)
+                    holoDisableShading(Index,1)
+                    holoBodygroup(Index,0,3)
+                    Index++
+                    
+                    TNPos += Space
+                }
+            }
+        break
+    }
+
+
+
+    #/////FUNCTIONS\\\\\#
+    #//GENERIC\\#
+    #[Updates the numerical display if present, assumes you are using 3 digits
+    Inputs:
+        [NUMBER] - The hologram index of the leftmost number
+        Number [NUMBER] - The number that will be displayed
+    ]#
+    function void number:updateNumeralDisplay(Number:number)
+    {
+        local RoundedNumber = min(int(Number),999)
+        local StringNumber = RoundedNumber:toString()
+
+        if(changed(Number))
+        {
+            if(RoundedNumber >= 100)
+            {
+                holoModel(This,"models/sprops/misc/alphanum/alphanum_"+StringNumber:index(1)+".mdl")
+                holoModel(This+1,"models/sprops/misc/alphanum/alphanum_"+StringNumber:index(2)+".mdl")
+                holoModel(This+2,"models/sprops/misc/alphanum/alphanum_"+StringNumber:index(3)+".mdl")
+            }
+
+            elseif(RoundedNumber > 10)
+            {
+                holoModel(This,"models/sprops/misc/alphanum/alphanum_0.mdl")
+                holoModel(This+1,"models/sprops/misc/alphanum/alphanum_"+StringNumber:index(1)+".mdl")
+                holoModel(This+2,"models/sprops/misc/alphanum/alphanum_"+StringNumber:index(2)+".mdl")
+            }
+
+            else
+            {
+                holoModel(This,"models/sprops/misc/alphanum/alphanum_0.mdl")
+                holoModel(This+1,"models/sprops/misc/alphanum/alphanum_0.mdl")
+                holoModel(This+2,"models/sprops/misc/alphanum/alphanum_"+StringNumber:index(1)+".mdl")
+            }
+        }
+    }
+
+    #[Updates the alphanumeric display if present
+    Inputs:
+        [VECTOR2] - The index of the leftmost letter/number, and the length of the display [INDEX,LENGTH]
+        String [ARRAY] - The string that will be displayed
+    ]#
+    function void vector2:updateAlphanumDisplay(String:array)
+    {
+        local Index = This[1]
+        local Length = This[2]
+
+        for(L=1,Length)
+        {
+            local Character = String[L,string]:lower()
+
+            switch(Character)
+            {
+                case "",
+                case " ",
+                    holoAlpha(Index+L,0)
+                break
+
+                default,
+                    holoColor(Index+L,DISPLAYCOLOUR)
+                    holoModel(Index+L,"models/sprops/misc/alphanum/alphanum_"+Character+".mdl")
+                break
+            }
+        }
+    }
+
+    #[Formats seconds into a vector (SS,MM,HH)
+    #Inputs:
+        [NUMBER] - Time in seconds
+    #Return:
+        [VECTOR] - Time in seconds, minutes, hours vec(S,M,H)
+    ]#
+    function vector number:formatTime()
+    {
+        local Seconds = floor(This%60)
+        local Minutes = floor(This/60)
+        local Hours = floor(Minutes/60)
+        Minutes = floor(Minutes%60)
+        
+        return vec(Seconds,Minutes,Hours)
+    }
+
+
+    #//STREAM\\#
+    #[Creates a stream on the E2 with the specified index, URL, and volume
+    #Inputs:
+        [NUMBER] - Index of the stream
+        URL [STRING] - The URL of the stream
+        Volume [NUMBER] - The volume (0-1)
+    ]#
+    function void number:streamCreate(URL:string,Volume:number)
+    {
+        local Ran = 0
+        #ifdef entity:streamStart(number,string,number,number)
+            entity():streamStart(This,URL,Volume,100)
+            Ran = 1
+        #endif
+        #ifdef entity:streamStart(number.number,string)
+            if(!Ran)
+            {
+                entity():streamStart(This,Volume,URL)
+                Ran = 1
+            }
+        #endif
+    }
+
+    #[Destroys a stream of the specified index
+    #Inputs:
+        [NUMBER] - Index of the stream
+    ]#
+    function void number:streamDestroy()
+    {
+        #ifdef streamStop(number)
+            streamStop(This)
+        #endif
+    }
+
+    #[Changes the volume of the stream
+    #Inputs:
+        [NUMBER] - Index of the stream
+        Volume [NUMBER] - The volume (0-1)
+    ]#
+    function void number:streamVolume(Volume:number)
+    {
+        #ifdef streamVolume(number,number)
+            streamVolume(This,Volume)
+        #endif
+    }
+
+    #[Returns how fast we can create streams, used for anti-spam
+    #Return:
+        [NUMBER] - Seconds + 0.25
+    ]#
+    function number streamMinInterval()
+    {
+        local Return = 0
+
+        #ifdef streamLimit()
+            Return = streamLimit()+0.25
+        #endif
+
+        return Return
+    }
+
+
+    #//MISC\\#
+    #[Notifies the owner of a message
+    Inputs:
+        Message [STRING] - The message that will be hinted to the owner
+    ]#
+    function void ownerNotify(Message:string)
+    {
+        hint("[renStreamRadio] "+Message,5.5)
+    }
+
+    #[Tells the owner a message
+    Inputs:
+        Message [STRING] - The message that will be printed to the owner's chat
+    ]#
+    function void ownerTell(Message:string)
+    {
+        print("[renStreamRadio] "+Message)
+    }
+
+    #[Prints a message into the owner's console
+    Inputs:
+        Message [STRING] - The message that will be printed to the owner's console
+    ]#
+    function void ownerConsole(Message:string)
+    {
+        print(_HUD_PRINTCONSOLE,"[renStreamRadio] "+Message)
+    }
+
+
+
+    #/////FINALIZATION\\\\\#
+    #//MISC\\#
+    runOnChat(1)
+
+    #Force a track update for the display
+    timer("track_update",25)
+
+
+    #//VERSION\\#
+    VERSION = "V1.0.6"
+    setName("renStreamRadio "+VERSION)
+}
+
+
+
+elseif(chatClk(owner()))
+{
+    local Said = owner():lastSaid():lower()
+    local Split = Said:explode(" ")
+    local Token = Split:string(1)
+    local Command = Split:string(2)
+    local Arg1 = Split:string(3)
+    local Arg1Num = Arg1:toNumber()
+
+    if(Token == "radio")
+    {
+        switch(Command)
+        {
+            #Manual; provides a description of the provided command.
+            case "man",
+            case "manual",
+                Arg1 = Arg1:left(3)
+                if(MANUAL:exists(Arg1)) {ownerTell(Arg1+": "+MANUAL[Arg1:toNumber(),string])}
+                else{ownerTell("Command "+Arg1+" not found, please use hel for a list of available commands.")}
+            break
+
+            #Help; provides a list of usable commands.
+            case "hel",
+            case "help",
+                ownerTell("Commands: man, hel, ver, res, pre, sto, vol, abo, rep, tra, aut, ran, ski.")
+            break
+
+            #Version; prints out the version, credits, and a hash
+            case "ver",
+            case "version",
+                ownerTell(VERSION)
+                ownerConsole(VERSION+" By: Renco; "+hashNoComments()+".")
+            break
+
+            #Reset; resets the E2
+            case "res",
+            case "reset",
+                ownerNotify("Resetting.")
+                STREAMINDEX:streamDestroy()
+                reset()
+            break
+
+            #Preset; plays the specified track
+            case "pre",
+            case "pla",
+            case "preset",
+            case "play",
+            case "track",
+                if(Autoplay) {ownerNotify("Currently in autoplay mode, please use sto to stop autoplay.")}
+
+                else
+                {
+                    if(TRACKS:exists(Arg1Num))
+                    {
+                        CurTrackIndex = Arg1Num
+                        timer("track_update",15)
+                    }
+                    else
+                    {
+                        ownerNotify("Cannot find track number: "+Arg1Num+".")
+                    }
+                }
+            break
+
+            #Stop; stops the radio, and autoplay
+            case "sto",
+            case "stop",
+                ownerNotify("Stopping radio.")
+
+                stoptimer("track_update") stoptimer("autoplay_update")
+
+                timer("track_update",15)
+
+                CurTrackIndex=Autoplay=Random = 0
+
+                AutoplayPlayed = array()
+            break
+
+            #Volume; sets the volume for new and current streams
+            case "vol",
+            case "volume",
+                if(Arg1Num) {CurVolume = Arg1Num/100 STREAMINDEX:streamVolume(CurVolume) ownerNotify("Setting stream volume to "+Arg1Num+"%.")}
+                else{ownerNotify("Current stream volume "+CurVolume*100+"%.")}
+            break
+
+            #About; prints information about the provided or current track
+            case "abo",
+            case "about",
+                if(Arg1Num&TRACKS:exists(Arg1Num)) {ownerTell(TRACKS[Arg1Num,table]:toString())}
+                else{ownerTell(CurTrackTable:toString())}
+            break
+
+            #Replay; replays the last played track
+            case "rep",
+            case "replay",
+                if(Autoplay) {ownerNotify("Currently in autoplay mode, please use sto to stop autoplay.")}
+                else{ownerNotify("Replaying last track.") timer("track_update",25)}
+            break
+
+            #Tracks; prints infomration about every track available
+            case "tra",
+            case "tracks",
+                local Total = 0
+
+                for(T=1,TRACKCOUNT) {Total = Total+TRACKS[T,table]["track_dura",number]}
+
+                local Time = Total:formatTime()
+
+                ownerTell(TRACKCOUNT+"; "+AUTOPLAYTRACKCOUNT+" autoplayable, H"+Time[3]+" M:"+Time[2]+" S:"+Time[1])
+            break
+
+            #Autoplay; plays tracks in order
+            case "aut",
+            case "auto",
+            case "autoplay",
+                if(Autoplay) {ownerNotify("Already in autoplay mode, please use sto to stop autoplay.")}
+                else{ownerNotify("Beginning autoplay.") timer("autoplay_update",100) Autoplay = 1 Random = 0}
+            break
+
+            #Random; plays a random track, remembering last tracks played
+            case "ran",
+            case "shu",
+            case "random",
+            case "shuffle",
+                if(Autoplay) {ownerNotify("Already in autoplay mode, please use sto to stop autoplay.")}
+                else{ownerNotify("Beginning random autoplay.") timer("autoplay_update",100) Autoplay=Random = 1}
+            break
+
+            #Skip; forces autoplay to choose a new track
+            case "ski",
+            case "skip",
+                if(Autoplay) {ownerNotify("Skipping current track.") stoptimer("autoplay_update") timer("autoplay_update",100)}
+                else{ownerNotify("Currently not in autoplay mode, please use aut or ran to begin autoplay.")}
+            break
+
+            #They got it wrong, tell them
+            default,
+                ownerNotify("Command "+Command+" not found, please use hel for a list of available commands.")
+            break
+        }
+
+        hideChat(1)
+    }
+}
+
+
+
+#PLAYING TRACKS
+elseif(clk("track_update"))
+{
+    #Check if we're gonna trigger the antispam
+    if((curtime()-LastPlayTime)>streamMinInterval())
+    {
+        #Used for antispam
+        LastPlayTime = curtime()
+
+        #Stop the last stream, mostly for replay
+        STREAMINDEX:streamDestroy()
+
+        #Update the current track table
+        CurTrackTable = TRACKS[CurTrackIndex,table]
+        local Time = CurTrackTable["track_dura",number]:formatTime()
+
+        #Play the new track if its non zero and exists
+        if((CurTrackIndex>0)&TRACKS:exists(CurTrackIndex))
+        {
+            STREAMINDEX:streamCreate(CurTrackTable["track_url",string],CurVolume)
+
+            ownerNotify("Playing track: "+CurTrackIndex+"; "+CurTrackTable["track_name",string]+".")
+
+            #Start autoplay again if we're using that, also avoid antispam
+            if(Autoplay)
+            {
+                timer("autoplay_update",(max(CurTrackTable["track_dura",number],streamMinInterval())+TRACKPADDING)*1000)
+            }
+        }
+
+        if(NUM) {NUM:updateNumeralDisplay(CurTrackIndex)}
+        if(ALPHANUM[2]) {timer("display_update",5) ScrollIndex = 1 Scroll = array()}
+
+        #Set the name
+        setName(
+            "renStreamRadio "+VERSION+"\n"+
+            "Currently Playing: "+CurTrackTable["track_arti",string]+" - "+CurTrackTable["track_name",string]+"\n"+
+            "Runtime; H:"+Time[3]+" M:"+Time[2]+" S:"+Time[1]
+        )
+    }
+
+    #Try again
+    else
+    {
+        stoptimer("track_update")
+
+        local Wait = streamMinInterval()
+
+        timer("track_update",Wait*1000)
+
+        ownerNotify("Anti-spam, waiting "+Wait+" seconds.")
+    }
+}
+
+
+
+#AUTOPLAY
+elseif(clk("autoplay_update"))
+{
+    #Random autoplay mode
+    if(Random)
+    {
+        #Stop autoplay when we've played everything
+        if(AutoplayPlayed:count()+1 > AUTOPLAYTRACKCOUNT) {Autoplay=Random = 0 AutoplayPlayed = array() stoptimer("autoplay_update") ownerNotify("Reached end of track list, stopping.")}
+
+        else
+        {
+            #Choose a random number
+            local RandomInt = randint(AUTOPLAYTRACKCOUNT)
+
+            #We've played this track before, try again
+            if(AutoplayPlayed:exists(RandomInt)) {stoptimer("autoplay_update") timer("autoplay_update",25) ownerConsole("Already played!")}
+
+            #We havent played this track, add it to the list and start the musak
+            else{stoptimer("autoplay_update") AutoplayPlayed:pushNumber(RandomInt) CurTrackIndex = AUTOPLAYTRACKS[RandomInt,number] timer("track_update",15)}
+        }
+    }
+
+    #Regular sequential autoplay mode
+    else
+    {
+        #Stop autoplay when we've played everything
+        if((AutoplayPlayed:count()+1)>AUTOPLAYTRACKCOUNT) {Autoplay = 0 AutoplayPlayed = array() stoptimer("autoplay_update") ownerNotify("Reached end of track list, stopping.")}
+
+        else
+        {
+            #Play the next track
+            AutoplayPlayed:pushNumber(AUTOPLAYTRACKS[AutoplayPlayed:count()+1,number])
+            CurTrackIndex = AutoplayPlayed[AutoplayPlayed:count(),number]
+            timer("track_update",15)
+        }
+    }
+}
+
+
+
+#ALPHANUM DISPLAY
+elseif(clk("display_update"))
+{
+    if(ALPHANUM[2])
+    {
+        local TrackName = CurTrackTable["track_name",string]
+
+        #Dont bother scrolling if it fits in the display
+        if(TrackName:length()<=ALPHANUM[2])
+        {
+            stoptimer("display_update")
+
+            ALPHANUM:updateAlphanumDisplay(TrackName:explode(""))
+        }
+
+        #Scrolling
+        else
+        {
+            timer("display_update",DISPLAY_FREQUENCY)
+
+            #Added space to the end for better scrolling
+            TrackName = TrackName+" "
+            local TrackNameExp = TrackName:explode("")
+            local TrackNameLength = TrackName:length()
+
+            ScrollIndex++
+
+            if(ScrollIndex > TrackNameLength) {ScrollIndex=1}
+
+            Scroll:pushString(TrackNameExp[ScrollIndex,string])
+
+            if(Scroll:count()>TrackNameLength) {Scroll:remove(1)}
+
+            ALPHANUM:updateAlphanumDisplay(Scroll)
+        }
+    }
+}

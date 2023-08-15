@@ -1,0 +1,682 @@
+@name renAutoSuspension
+@persist [ToDoStarted ToDoTotal ToDoCount]:number [EntityGroups SpecialGroups ToDo]:table
+@persist [VERSION]:string [MANUAL GROUPS COLOURS]:table
+@persist [CONSTRAINT_FREQUENCY]:number
+@persist [SelSelecting]:string
+@trigger none
+runOnKeys(owner(),1)
+#[
+E2 By:
+    Renco - Nearly Everything
+    Red - Original Concept
+    Fizzles - Alpha Tester
+
+!!!!!
+RE-DISTRIBUTE I GUESS
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+This E2 can, among other things, generate suspension for your vehicle
+
+
+
+//////////VERSION LOG\\\\\\\\\
+V0.0.0 (10-26-20) - Initial Devloplment
+V0.0.1 (10-27-20) - Chat commands and ToDo system complete.
+V0.0.2 (10-29-20) -
+    [CHANGED] - Updated ver to new standard
+V0.0.3 (12-13-20) -
+    [FIXED] Numerous undocumented fixes with Fizzle's help
+
+
+
+//////////NOTES\\\\\\\\\\
+ToDo table overview
+For whatever constraint you are going to add to the ToDo list it really should have every entry that constraint uses, just in case
+You should be using the functions to write to the ToDo table now
+    [cn] [STRING]  Constraint Name; weld, elastic, rope, ballsocket, axis
+    [p1] [VECTOR3] Position 1 Users: elastic, rope, ballsocket, axis
+    [p2] [VECTOR3] Position 2 Users: elastic, rope, axis
+    [e1] [ENTITY]  Entity 1   Users: weld, elastic, rope, ballsocket, axis
+    [e2] [ENTITY]  Entity 2   Users: weld, elastic, rope, ballsocket, axis
+    [la] [VECTOR3] Local Axis Users: axis
+    [mi] [VECTOR3] Minimums   Users: ballsocket
+    [ma] [VECTOR3] Maximums   Users: ballsocket
+    [cd] [VECTOR3] Constant, Damping, Relative Users: elastic
+    [st] [NUMBER]  Stretch Only Users: elastic
+    [ri] [NUMBER]  Rigid        Users: rope
+    [ro] [NUMBER]  Rotate only  Users: ballsocket
+
+
+
+//////////TO-DO\\\\\\\\\\
+Can only select your own props
+    Command to enable selecting props of people who have your permissions
+    Notify owner
+Noises
+    Noise when we are done constraining
+    Constraint specific noises
+    Selection specific noises
+Sprocket ropes
+    See the swedish meme tank
+
+/////DONE\\\\\#
+Special flag setting for things like setting what wheels will be used for steering?
+    Perhaps right click?
+]#
+
+
+#//////////INITIALIZATION\\\\\\\\\#
+#Reset the E2 if we have been duped or the dupe has finished spawning
+if (duped()|dupefinished()) {reset()}
+
+#That's kinda suspension
+if(first())
+{
+    #/////LIBRARIES\\\\\#
+    #include "renKeyLib"
+
+
+
+    #/////INITIALIZE VARIABLES\\\\\#
+    #//FREQUENCIES\\#
+    CONSTRAINT_FREQUENCY = 150 #Default: 150
+
+    #//MANUAL\\#
+    MANUAL = table()
+    MANUAL["ver",string] = "Prints the E2's version into chat, aswell as credits and a hash into the console."
+    MANUAL["res",string] = "Reset the entire E2."
+    MANUAL["clr",string] = "Clears all entries, use with a specific entity group to clear that group. Use tod to clear the to-do list. <GROUP>"
+    MANUAL["ali",string] = "Aligns all of the wheels to one plane."
+    MANUAL["hel",string] = "Prints out all available chat commands."
+    MANUAL["man",string] = "Prints out useful information about a command. <COMMAND>"
+    MANUAL["rat",string] = "Changes the rate at which constraints are created; Default: 150. <RATE>"
+    MANUAL["wel",string] = "Welds everything in the baseplate group together."
+    MANUAL["sel",string] = "Used to select/deselect entities in an entity group using"+RenKL_KEYS["SELECT",string]+". Pass as an argument to print the amount selected in each entity group. <GROUP>"
+    MANUAL["gro",string] = "Prints out all avaiable entity groups and provides descriptions. <GROUP>"
+    MANUAL["con",string] = "Starts the constraining process."
+    #//GENERAL SELECTION\\#
+    MANUAL["end",string] = "{SEL ARGUMENT} Stop selection."
+    #//SUSPENSION CREATION\\#
+    MANUAL["ela",string] = "Creates elastics on the wheels. <Constant> <Damping> <Relative> <Count>"
+    MANUAL["rop",string] = "Creates ropes."
+    MANUAL["bal",string] = "Creates ballsockets."
+    MANUAL["lin",string] = "Links all of the roadwheels together to mimic tracks."
+    MANUAL["axi",string] = "Axises the Sprocket(s) to the Baseplate(s)"
+
+    GROUPS = table()
+    GROUPS["b",string]  = "Baseplates, used for everything suspension related. First selected entity will automatically be the main baseplate."
+    GROUPS["lr",string] = "Left Roadwheels, used for tank suspension."
+    GROUPS["rr",string] = "Right Roadwheels, used for tank suspension."
+    GROUPS["ls",string] = "Left Sprockets, used for tank suspension."
+    GROUPS["rs",string] = "Right Sprockets, used for tank suspension."
+    GROUPS["w",string]  = "Wheels, special marked wheels will be used for steering."
+    GROUPS["m",string]  = "Master Plates, used for car steering."
+
+    GROUPCOLORS = table()
+    GROUPCOLORS["b",vector] = vec(250)
+    GROUPCOLORS["lr",vector] = vec(250,50,50)
+    GROUPCOLORS["rr",vector] = vec(50,250,50)
+    GROUPCOLORS["ls",vector] = GROUPCOLORS["lr",vector]*0.5
+    GROUPCOLORS["rs",vector] = GROUPCOLORS["rs",vector]*0.5
+    GROUPCOLORS["w",vector] = vec(150)
+    GROUPCOLORS["b",vector] = vec(50)
+    GROUPCOLORS["special",vector] = vec(50,50,250)
+
+
+
+    #/////FUNCTIONS\\\\\#
+    #[Hints the owner of the E2
+    Inputs:
+        Message [STRING] - Message that will be added after [renAutoSuspension]
+    ]#
+    function void ownerNotify(Message:string)
+    {
+        hint("[renAutoSuspension] "+Message,5.5)
+    }
+
+    #[Prints to the chat of the E2's owner
+    Inputs:
+        Message [STRING] - Message that will be added after [renAutoSuspension]
+    ]#
+    function void ownerTell(Message:string)
+    {
+        print("[renAutoSuspension] "+Message)
+    }
+
+    #[Prints to the owner's console
+    Inputs:
+        Message [STRING] - Message that will be added after [renAutoSuspension]
+    ]#
+    function void ownerBug(Message:string)
+    {
+        print(_HUD_PRINTCONSOLE,"[renAutoSuspension] "+Message)
+    }
+
+    #[Creates/deletes/updates? a hologram slightly larger than the host prop
+    Inputs:
+        Prop [ENTITY] - The prop we will be creating/delete a highlight for
+        Add  [NUMBER] - Creating (1) or Deleting (0) a highlight
+    ]#
+    function void highlightProp(Prop:entity,Add:number)
+    {
+        local EID = Prop:id()
+
+        if(Add) {holoCreate(EID,Prop:pos(),vec(1.5),Prop:angles(),vec(),Prop:model()) holoParent(EID,Prop) holoDisableShading(EID,1) holoAlpha(EID,100)}
+        else{holoDelete(EID)}
+    }
+
+    #[Creates/deletes/updates? highlights for an array of props
+    Inputs:
+        Props [ARRAY] - The array of props we will be creating/deleting highlights for
+        Add   [NUMBER] - Creating (1) or Deleting (0) highlights
+    ]#
+    function void highlightProp(Props:array,Add:number)
+    {
+        for(P=1,Props:count())
+        {
+            local Prop = Props[P,entity]
+            local EID = Prop:id()
+
+            if(Add) {holoCreate(EID,Prop:pos(),vec(1.5),Prop:angles(),vec(),Prop:model()) holoParent(EID,Prop) holoDisableShading(EID,1) holoAlpha(EID,100)}
+            else{holoDelete(EID)}
+        }
+    }
+
+    #[Resets the Entity Groups table back to normal
+    ]#
+    function void resetEntityGroups()
+    {
+        EntityGroups = table()
+        EntityGroups["b",array]  = array()
+        EntityGroups["lr",array] = array()
+        EntityGroups["rr",array] = array()
+        EntityGroups["ls",array] = array()
+        EntityGroups["rs",array] = array()
+        EntityGroups["w",array]  = array()
+        EntityGroups["m",array]  = array()
+    }
+
+    #[Resets the Special Groups table back to normal
+    ]#
+    function void resetSpecialGroups()
+    {
+        SpecialGroups = table()
+        SpecialGroups["b",array]  = array()
+        SpecialGroups["lr",array] = array()
+        SpecialGroups["rr",array] = array()
+        SpecialGroups["ls",array] = array()
+        SpecialGroups["rs",array] = array()
+        SpecialGroups["w",array]  = array()
+        SpecialGroups["m",array]  = array()
+    }
+
+    #[Searches through an array and removes all traces of a specified entity
+    Inputs:
+        THIS [ARRAY]    - The array you wish to search
+        Entity [ENTITY] - The entity you want removed
+    ]#
+    function void array:removeArrayEntity(Entity:entity)
+    {
+        for(A=1,This:count())
+        {
+            if(This[A,entity] == Entity) {This:removeEntity(A)}
+        }
+    }
+
+    #[Creates an entry to create a weld in the ToDo list
+    Inputs:
+        Entity1 [ENTITY] - One of the entities to be welded
+        Entity2 [ENTITY] - The other entity to be welded
+    ]#
+    function void todoAddWeld(Entity1:entity,Entity2:entity)
+    {
+        local Table = table()
+        Table["cn",string] = "weld"
+        Table["e1",entity] = Entity1
+        Table["e2",entity] = Entity2
+
+        ToDo:pushTable(Table)
+    }
+
+    #[Creates an entry to make an elastic
+    Inputs:
+        Entity1   [ENTITY] - One of the entities to be elasticated
+        Entity2   [ENTITY] - The other entity to be elasticated
+        Position1 [VECTOR] - Position for entity 1
+        Position2 [VECTOR] - Position for entity 2
+        CDR       [VECTOR] - constant, Damping, Relative, you know this
+        StretchOnly [NUMBER] - It will only stretch
+    ]#
+    function void todoAddElastic(Entity1:entity,Entity2:entity,Position1:vector,Position2:vector,CDR:vector,StretchOnly:number)
+    {
+        local Table = table()
+        Table["cn",string] = "elastic"
+        Table["e1",entity] = Entity1
+        Table["e2",entity] = Entity2
+        Table["p1",vector] = Position1
+        Table["p2",vector] = Position2
+        Table["cd",vector] = CDR
+        Table["st",number] = StretchOnly
+
+        ToDo:pushTable(Table)
+    }
+
+    #[Creates an entry to make a rope
+    Inputs:
+        Entity1   [ENTITY] - One of the entities that will be roped
+        Entity2   [ENTITY] - The other entity that will be roped
+        Position1 [VECTOR] - Position for entity 1
+        Position2 [VECTOR] - Position for entity 2
+        Rigid     [NUMBER] - Rigid or not?
+    ]#
+    function void todoAddRope(Entity1:entity,Entity2:entity,Position1:vector,Position2:vector,Rigid:number)
+    {
+        local Table = table()
+        Table["cn",string] = "rope"
+        Table["e1",entity] = Entity1
+        Table["e2",entity] = Entity2
+        Table["p1",vector] = Position1
+        Table["p2",vector] = Position2
+        Table["ri",number] = Rigid
+
+        ToDo:pushTable(Table)
+    }
+
+    #[Creates an entry to make a ballsocket
+    Inputs:
+        Entity1   [ENTITY] - One of the entities that will recieve the ballsocket
+        Entity2   [ENTITY] - The other entity that will be ballsocketed
+        Position1 [VECTOR] - 
+        Minimums  [VECTOR] - Minimum angles
+        Maximums  [VECTOR] - Maximum angles
+    ]#
+    function void todoAddBallsocket(Entity1:entity,Entity2:entity,Position1:vector,Minimums:vector,Maximums:vector)
+    {
+        local Table = table()
+        Table["cn",string] = "ballsocket"
+        Table["e1",entity] = Entity1
+        Table["e2",entity] = Entity2
+        Table["p1",vector] = Position1
+        Table["mi",vector] = Minimums
+        Table["ma",vector] = Maximums
+
+        ToDo:pushTable(Table)
+    }
+
+    #[Creates an entry to make an axis
+    Inputs:
+        Entity1   [ENTITY] - One of the wheels
+        Entity2   [ENTITY] - The baseplate
+        Position1 [VECTOR] - Position for entity 1
+        Position2 [VECTOR] - Position for entity 2
+        LocalAxis [VECTOR] - 
+    ]#
+    function void todoAddAxis(Entity1:entity,Entity2:entity,Position1:vector,Position2:vector,LocalAxis:vector)
+    {
+        local Table = table()
+        Table["cn",string] = "rope"
+        Table["e1",entity] = Entity1
+        Table["e2",entity] = Entity2
+        Table["p1",vector] = Position1
+        Table["p2",vector] = Position2
+        Table["la",vector] = LocalAxis
+
+        ToDo:pushTable(Table)
+    }
+
+
+
+    #/////FINALIZE\\\\\#
+    #//MISC\\#
+    runOnChat(1)
+    resetEntityGroups()
+    resetSpecialGroups()
+
+    #//VERSION\\#
+    VERSION = "V0.0.3"
+    setName("renAutoSuspension "+VERSION)
+}
+
+
+
+#/////////CONTROL\\\\\\\\\\#
+#Key commands
+elseif(keyClk(owner()))
+{
+    if(!owner():isTyping()&!owner():vehicle())
+    {
+        local Key = keyClkPressed()
+        local Pressed = owner():keyPressed(Key)
+
+        switch(Key)
+        {
+            case RenKL_KEYS["SELECT",string],
+                if(Pressed & SelSelecting)
+                {
+                    local SelEntity = owner():aimEntity()
+                    local SelID = SelEntity:id()
+
+                    if(EntityGroups[SelSelecting,array]:exists(SelID))
+                    {
+                        EntityGroups[SelSelecting,array]:unset(SelID)
+                        SpecialGroups[SelSelecting,array]:unset(SelID)
+
+                        highlightProp(SelEntity,0)
+                    }
+                    
+                    else
+                    {
+                        EntityGroups[SelSelecting,array][SelID,entity] = SelEntity
+
+                        highlightProp(SelEntity,1)
+
+                        if((SelSelecting == "b") & (EntityGroups[SelSelecting,array]:count() == 0))
+                        {
+                            SpecialGroups[SelSelecting,array][SelID,entity] = SelEntity
+                            holoColor(SelID,GROUPCOLORS["special",vector])
+                        }
+                        else
+                        {
+                            holoColor(SelID,GROUPCOLORS["SelSelecting",vector])
+                        }
+                    }
+                }
+            break
+
+            case RenKL_KEYS["SPECIAL",string],
+                if(Pressed & SelSelecting)
+                {
+                    local SelEntity = owner():aimEntity()
+                    local SelID = SelEntity:id()
+                    local Color = 1
+
+                    if(SpecialGroups[SelSelecting,array]:exists(SelID))
+                    {
+                        SpecialGroups[SelSelecting,array]:unset(SelID)
+                        Color = 0
+                    }
+
+                    elseif(!EntityGroups[SelSelecting,array]:exists(SelID))
+                    {
+                        SpecialGroups[SelSelecting,array][SelID,entity] = SelEntity
+                        EntityGroups[SelSelecting,array][SelID,entity] = SelEntity
+                        highlightProp(SelEntity,1)
+                    }
+
+                    else
+                    {
+                        SpecialGroups[SelSelecting,array][SelID,entity] = SelEntity
+                    }
+
+                    if(Color) {holoColor(SelID,GROUPCOLORS["special",vector])} else{holoColor(SelID,GROUPCOLORS[SelSelecting,vector])}
+                }
+            break
+        }
+    }
+}
+
+#Chat commands
+elseif(chatClk(owner()))
+{
+    #Get what the owner last said and process it down to form(s) we can use
+    local Said = owner():lastSaid():lower()
+    local Split = Said:explode(" ")
+    local Token = Split:string(1)
+    local Command = Split:string(2)
+    local Arg1 = Split:string(3)
+    local Arg2 = Split:string(4)
+    local Arg3 = Split:string(5)
+    local Arg4 = Split:string(6)
+
+    if(Token == "auto")
+    {
+        switch(Command)
+        {
+            #Notfies the owner the version of the E2 and prints out the hash and credits to the console
+            case "version",
+            case "ver",
+                ownerNotify(VERSION)
+                ownerBug(VERSION+" By: Renco, Red; "+hashNoComments()+".")
+            break
+
+            #Resets the E2.
+            case "reset",
+            case "res",
+                ownerNotify("Resetting.")
+                reset()
+            break
+
+            #Clears a multitude of things.
+            case "clear",
+            case "clr",
+                if(GROUPS:exists(Arg1)) {ownerNotify("Clearing entity group: "+Arg1+".") highlightProp(EntityGroups[Arg1,array],0) EntityGroups[Arg1,array] = array() SpecialGroups[Arg1,array] = array()}
+                elseif(Arg1 == "tod") {if(ToDoStarted) {ownerNotify("Cannot clear to-do, in progress.")} else{ownerNotify("Clearing to-do.") ToDo = table()}}
+                elseif(!Arg1) {ownerNotify("Clearing all entity groups.") holoDeleteAll() resetEntityGroups() resetSpecialGroups() ToDo = table()}
+                else{ownerNotify(Arg1+" Is not a valid entity group, please use gro for a list of entity groups.")}
+            break
+
+            #Aligns wheels on cars/tanks
+            case "align",
+            case "ali",
+
+            break
+
+            #Tells the owner what commands are available
+            case "help",
+            case "hel",
+                ownerTell("Commands: ver, res, clr, ali, hel, man, rat, wel, ela, rop, bal, lin, axi, gro.")
+            break
+
+            #Tells the owner about the command
+            case "manual",
+            case "man",
+                if(MANUAL:exists(Arg1)) {ownerTell(Arg1+": "+MANUAL[Arg1,string])}
+                else{ownerTell("No manual entry found for: "+Arg1+", please use hel for a list of commands.")}
+            break
+
+            #Allows the owner to change the rate at which constraints are created
+            case "rate",
+            case "rat",
+                if(Arg1) {ownerNotify("Setting rate to: "+Arg1+".") CONSTRAINT_FREQUENCY = (Arg1:toNumber())}
+                else {ownerNotify("Resetting rate back to: 150") CONSTRAINT_FREQUENCY = 150}
+            break
+
+            #Welds everything in the baseplate entity group together
+            case "weld",
+            case "wel",
+                if(!EntityGroups[Arg1,array]:count()) {ownerNotify("Nothing to weld!")}
+                elseif(EntityGroups[Arg1,array]:count() == 1) {ownerNotify("Nothing else to weld!")}
+                else{}
+            break
+
+            #Allows the owner to add/remove things to the entity groups
+            case "select",
+            case "sel",
+                if(Arg1 == "sel") {ownerTell("b: "+EntityGroups["b",array]:count()+",lr: "+EntityGroups["lr",array]:count()+",rr: "+EntityGroups["rr",array]:count()+",ls: "+EntityGroups["ls",array]:count()+",rs: "+EntityGroups["rs",array]:count()+",w: "+EntityGroups["w",array]:count()+",m: "+EntityGroups["m",array]:count()+".")}
+                elseif(Arg1 == "end") {ownerNotify("Stopping selection.") SelSelecting = ""}
+                elseif(GROUPS:exists(Arg1)) {ownerNotify("Selecting: "+Arg1+".") SelSelecting = Arg1}
+                else {ownerNotify(Arg1+" Is not a valid entity group, please use gro for a list of entity groups.")}
+            break
+
+            #Creates elastics for all of the wheels
+            case "elastic",
+            case "elastics",
+            case "ela",
+
+            break
+
+            #Creates generic rope suspension
+            case "rope",
+            case "ropes",
+            case "rop",
+
+            break
+
+            #Creates ballsockets
+            case "ballsocket",
+            case "ballsockets",
+            case "bal",
+
+            break
+
+            #Creates ropes between each of the wheels to mimic tracks
+            case "link",
+            case "lin",
+
+            break
+
+            #Axises the sprockets to the baseplate
+            case "axis",
+            case "axi",
+
+            break
+
+            #Lists and gives descriptions for entity groups
+            case "group",
+            case "groups",
+            case "gro",
+                if(!Arg1:length()) {ownerTell("Entity Groups: b, lr, rr, ls, rs, w, m.")}
+                elseif(GROUPS:exists(Arg1)) {ownerTell(Arg1+": "+GROUPS[Arg1,string])}
+                else{ownerTell("No description found for: "+Arg1+", please use gro for a list of entity groups.")}
+            break
+
+            #Begins the constraining process
+            case "constrain",
+            case "con",
+                if(ToDoStarted) {ownerNotify("Already constraining!")}
+
+                elseif(ToDo:count())
+                {
+                    ToDoStarted = curtime()
+                    ToDoTotal = ToDo:count()
+                    ownerNotify("Beginning constraining.")
+                    ownerBug("Constraining starting: "+ToDoStarted)
+                    timer("constraint",CONSTRAINT_FREQUENCY)
+                }
+
+                else{ownerNotify("No constraints to make!")}
+            break
+
+            #You didnt say the magic word
+            default,
+                ownerNotify("Command: "+Command+" not found, please use hel for a list of commands.")
+            break
+        }
+
+    hideChat(1)
+    }
+}
+
+
+
+#//////////MAIN CONSTRAINT LOOP\\\\\\\\\\#
+elseif(clk("constraint"))
+{
+    #If we have things left to do, containue the loop
+    if(ToDo:count()) {timer("constraint",CONSTRAINT_FREQUENCY)}
+
+    #Stopping the loop, tell the owner, print debug info, reset things
+    else
+    {
+        ownerTell("Done! Took: "+(ToDoStarted-curtime()))
+        if((ToDoCount/ToDoTotal) < 1) {ownerNotify("Multiple constraints may have failed to create, check console.")}
+        ownerBug("Constraining ended: "+curtime()+", "+ToDoCount+" operations.") 
+        ToDoStarted=ToDoTotal=ToDoCount = 0
+    }
+
+    #Pop the current thing from the list
+    local Current = ToDo:popTable()
+
+    #Also used to increase the ToDoCount to see if we've created all the constraints expected
+    local Ran = 0
+
+    switch(Current["cn",string])
+    {
+        case "weld",
+            ownerBug("Creating weld: "+curtime())
+            if(!Ran)
+            {
+                #ifdef weld(entity,entity)
+                    weld(Current["e1",entity],Current["e2",entity])
+                    Ran = 1
+                #endif
+            }
+            if(!Ran)
+            {
+                #ifdef entity:weldTo(entity,number)
+                    Current["e1",entity]:weldTo(Current["e2",entity],0)
+                    Ran = 1
+                #endif
+            }
+        break
+
+        case "elastic",
+            ownerBug("Creating elastic: "+curtime())
+            if(!Ran)
+            {
+                #ifdef entity:elasticTo(entity,vector,vector,number,number,number,string,number,number)
+                    Current["e1",entity]:elasticTo(Current["e2",entity],Current["p1",vector],Current["p2",vector],Current["cd",vector]:x(),Current["cd",vector]:y(),Current["cd",vector]:z(),"",0,Current["st",number])
+                    Ran = 1
+                #endif
+            }
+            if(!Ran)
+            {
+                #ifdef hydraulic(number,entity,vector,entity,vector,number,number,number,string,number,number)
+                    hydraulic(randint(999),Current["e1",entity],Current["p1",vector],Current["e2",entity],Current["p2",vector],Current["cd",vector]:x(),Current["cd",vector]:y(),Current["cd",vector]:z(),"",0,Current["st",number])
+                    Ran = 1
+                #endif
+            }
+        break
+
+        case "rope",
+            ownerBug("Creating rope: "+curtime())
+            if(!Ran)
+            {
+                #ifdef entity:ropeTo(entity,vector,vector,number,number,number,string,number)
+                    Current["e1",entity]:ropeTo(Current["e2",entity],Current["p1",vector],Current["p2",vector],0,0,0,"",Current["ri",number])
+                    Ran = 1
+                #endif
+            }
+            if(!Ran)
+            {
+                #ifdef rope(number,entity,vector,entity,vector,number,number,string,number)
+                    rope(randint(999),Current["e1",entity],Current["p1",vector],Current["e2",entity],Current["p2",vector],0,0,"",Current["ri",number])
+                    Ran = 1
+                #endif
+            }
+        break
+
+        case "ballsocket",
+            ownerBug("Creating ballsocket: "+curtime())
+            if(!Ran)
+            {
+                #ifdef ballsocket(entity,vector,entity,vector,vector,vector,number)
+                    ballsocket(Current["e1",entity],Current["p1",vector],Current["e2",entity],Current["mi",vector],Current["ma",vector],vec(0),Current["ro",number])
+                    Ran = 1
+                #endif
+            }
+        break
+
+        case "axis",
+            ownerBug("Creating axis: "+curtime())
+            if(!Ran)
+            {
+                #ifdef entity:axisTo(entity,vector,vector,number,number,number,number,vector)
+                    Current["e1",entity]:axisTo(Current["e2",entity],Current["p1",vector],Current["p2",vector],0,0,0,1,Current["la",vector])
+                    Ran = 1
+                #endif
+            }
+            if(!Ran)
+            {
+                #ifdef axis(entity,vector,entity,vector,number,vector)
+                    axis(Current["e1",entity],Current["p1",vector],Current["e2",entity],Current["p2",vector],0,Current["la",vector])
+                #endif
+            }
+        break
+    }
+
+    if(!Ran) {ownerBug("Failed to make: "+Current["cn",string])} else{ToDoCount++}
+}

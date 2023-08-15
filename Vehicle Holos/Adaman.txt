@@ -1,0 +1,172 @@
+@name Adaman Holos
+@inputs [MSGBUS]:table [ShotsLeft]:number [Base Rack DoorL DoorR]:entity
+@outputs [Fire Reload]:number [Tarpos]:vector
+@persist [STEP_FREQUENCY RELOAD_FREQUENCY]:number
+@persist [Gunner]:entity
+@persist [Weapons_Free]:number
+@persist [DEBUG MAXRATE RACKREF DOORLREF DOORRREF PARENTED]:number [RACKORIGIN DOORLORIGIN DOORRORIGIN]:vector
+@outputs [Rate WFire Step Reloaded]:number
+@trigger [MSGBUS]
+runOnKeys(Gunner,1)
+#By: Renco
+if(duped()|dupefinished()) {reset()}
+
+if(first())
+{
+    local Index = 0
+    DEBUG = 0
+    MAXRATE = 0.25
+    
+    #include "renKeyLib"
+    
+    STEP_FREQUENCY = 50
+    RELOAD_FREQUENCY = 100
+    
+    if(Base:isValid())
+    {
+        #Antenna
+        holoCreate(Index,Base:toWorld(vec(-71.907463,-25.425771,27.377151)+vec(20.8,0,6.8)),vec(1),Base:toWorld(ang(0)),vec4(255),"models/props_survival/jammer/jammer.mdl")
+        holoParent(Index,Base)
+        holoClipEnabled(Index,1,1)
+        holoClipEnabled(Index,2,1)
+        holoClip(Index,1,vec(0,0,13),vec(0,0,1),0)
+        holoClip(Index,2,vec(-33,0,0),vec(-1,0,1),0)
+        Index++
+        
+        if(Rack:isValid())
+        {
+            if(DEBUG == 1) {holoCreate(Index,Rack:toWorld(vec(0)),vec(1),Rack:toWorld(ang(0)),vec4(255),"models/sprops/misc/origin.mdl")}
+            elseif(DEBUG == 2) {holoCreate(Index,Rack:toWorld(vec(0)),vec(1),Rack:toWorld(ang(0)),vec4(255,127,0,150),Rack:model())}
+            else{holoCreate(Index,Rack:toWorld(vec(0)),vec(0),Rack:toWorld(ang(0)),vec4(0),"plane")}
+            holoParent(Index,Base)
+            RACKREF = Index
+            RACKORIGIN = Base:toLocal(holoEntity(Index):pos())
+            Index++
+        }
+
+        if(DoorL:isValid())
+        {
+            if(DEBUG == 1) {holoCreate(Index,DoorL:toWorld(vec(0,6.250488,0)),vec(1),DoorL:toWorld(ang(0)),vec4(255),"models/sprops/misc/origin.mdl")}
+            elseif(DEBUG == 2) {holoCreate(Index,DoorL:toWorld(vec(0,6.250488,0)),vec(1),DoorL:toWorld(ang(0)),vec4(255,127,0,150),DoorL:model())}
+            else{holoCreate(Index,DoorL:toWorld(vec(0,6.250488,0)),vec(0),DoorL:toWorld(ang(0)),vec4(0),"plane")}
+            holoParent(Index,Base)
+            DOORLREF = Index
+            DOORLORIGIN = Base:toLocal(holoEntity(Index):pos())
+            Index++
+        }
+
+        if(DoorR:isValid())
+        {
+            if(DEBUG == 1) {holoCreate(Index,DoorR:toWorld(vec(0,-6.250488,0)),vec(1),DoorR:toWorld(ang(0)),vec4(255),"models/sprops/misc/origin.mdl")}
+            elseif(DEBUG == 2) {holoCreate(Index,DoorR:toWorld(vec(0,-6.250488,0)),vec(1),DoorR:toWorld(ang(0)),vec4(255,127,0,150),DoorR:model())}
+            else{holoCreate(Index,DoorR:toWorld(vec(0,-6.250488,0)),vec(0),DoorR:toWorld(ang(0)),vec4(0),"plane")}
+            holoParent(Index,Base)
+            DOORRREF = Index
+            DOORRORIGIN = Base:toLocal(holoEntity(Index):pos())
+            Index++
+        }
+    }
+    
+    function void msgBusIn()
+    {
+        if(->MSGBUS)
+        {
+            Tarpos = MSGBUS["AIMPOS",vector]
+            Gunner = MSGBUS["GUNNER",entity]
+        }
+    }
+    
+    function void msgBusOut()
+    {
+        if(->MSGBUS)
+        {
+            MSGBUS["WEAPONS_FREE",number] = Weapons_Free
+            MSGBUS["MAIN_GUN_SELECTED",entity] = Rack
+        }
+    }
+    
+    function number canFire(Fire:number)
+    {
+        return inrange(Step,20,26)&Fire
+    }
+
+    runOnLast(1)
+    
+    msgBusIn()
+    
+    MSGBUS["NODE_NAMES",array]:pushString(entity():getName())
+}
+
+elseif(inputClk())
+{
+    msgBusIn()
+
+    if(changed(Gunner)&Gunner&(DEBUG==0)&(!PARENTED))
+    {
+        Rack:parentTo(holoEntity(RACKREF))
+        DoorL:parentTo(holoEntity(DOORLREF))
+        DoorR:parentTo(holoEntity(DOORRREF))
+        Rack:soundPlay("parented",2,"ambient/energy/weld1.wav")
+        PARENTED = 1
+        timer("reload",RELOAD_FREQUENCY)
+    }
+
+    msgBusOut()
+}
+
+elseif(keyClk(Gunner))
+{
+    if((!Gunner:isTyping())&Gunner:vehicle())
+    {
+        local Key = keyClkPressed()
+        local Pressed = Gunner:keyPressed(Key)
+        
+        switch(Key)
+        {
+            case RenKL_KEYS["TOGGLE_TURRET",string],
+                if(Pressed) {Weapons_Free = !Weapons_Free}
+            break
+            
+            default,
+                WFire = Gunner:keyAttack1()
+                Fire = canFire(WFire)
+            break
+        }
+    }
+}
+
+elseif(clk("step"))
+{
+    if(Step == 25) {if(Rate>0) {soundStop("move")} elseif(Rate<0) {Rack:soundPlay("move",0,"acf_extra/tankfx/servo_1.wav") soundVolume("move",0.8) soundPitch("move",80)}}
+    Step = clamp(Step+Rate,0,25)
+
+    if(changed(Step)) {timer("step",STEP_FREQUENCY)} else{stoptimer("step") soundStop("move") Rack:soundPlay("move_stop",2.5,"physics/metal/metal_box_impact_soft"+randint(1,3)+".wav")}
+
+    local DoorAng = -ang(0,0,clamp(Step,0,4)*22.5)
+    local DoorPos = vec(0,0,-clamp(Step-4,0,15.5))
+    local RackPos = vec(0,0,clamp(Step-5,0,20))
+
+    holoAng(DOORLREF,Base:toWorld(DoorAng))
+    holoPos(DOORLREF,Base:toWorld(DOORLORIGIN+DoorPos))
+    holoAng(DOORRREF,Base:toWorld(-DoorAng))
+    holoPos(DOORRREF,Base:toWorld(DOORRORIGIN+DoorPos))
+
+    holoPos(RACKREF,Base:toWorld(RACKORIGIN+RackPos))
+
+    Fire = canFire(WFire)
+    
+    if(Step == 5) {if(Rate>0) {Rack:soundPlay("move",0,"acf_extra/tankfx/servo_1.wav") soundVolume("move",0.8) soundPitch("move",80)} elseif(Rate<0) {soundStop("move")}}
+}
+
+elseif(clk("reload"))
+{
+    timer("reload",RELOAD_FREQUENCY)
+
+    if(ShotsLeft==0) {Rate = -MAXRATE timer("step",STEP_FREQUENCY) Reloaded = 0}
+    elseif(Reloaded) {if(changed(Weapons_Free)) {timer("step",STEP_FREQUENCY) Rate = (Weapons_Free ? MAXRATE : -MAXRATE)}}
+    elseif(ShotsLeft==2) {Reloaded = 1 if(Weapons_Free) {timer("step",STEP_FREQUENCY) Rate = MAXRATE}}
+
+    Reload = inrange(Step,0,4)
+}
+
+if(last()) {Rack:deparent() DoorL:deparent() DoorR:deparent()}

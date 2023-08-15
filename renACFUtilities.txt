@@ -1,0 +1,398 @@
+@name renACFUtilities
+@persist [VERSION]:string [OVERLOADS]:array [MANUAL PENS ALIAS NUMBERS]:table #Global Variables
+@persist [Ent]:entity #"Runtime" Variables
+@trigger none
+@model models/props_lab/reciever01d.mdl
+#[
+E2 By:
+    Renco - Nearly everything
+    Whoever wrote the overmatch tester
+
+!!!!!
+REALLY DO-NOT RE-DISTRIBUTE!
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+Tells you some helpful information about some acf entities
+Just spawn it on an acf ent/prop to start
+    Use 'check' to perform another check
+    Use 'set' while looking at an entity of your choice to select it
+        If you know the entity ID (A number) you can supply that with it to select that entity
+!!!!!Overmatching may not occur if the penetration value of the round is lower than the armor!!!!!!
+
+
+
+//////////VERSION LOG\\\\\\\\\\
+V0.0.0 (01-05-21) - Initial Development
+V1.0.0 (01-05-21)
+    [ADDED] Added fuel time checker
+    [ADDED] Added gearbox overtorque checker
+    [ADDED] Added overmatch checker
+
+
+
+//////////TO-DO\\\\\\\\\\
+
+/////DONE\\\\\
+]#
+
+
+#//////////INITIALIZATION\\\\\\\\\\#
+#Reset the E2 if we have been duped or the dupe has finished spawning
+if(duped()|dupefinished()) {reset()}
+
+#Honk
+if(first())
+{
+    #/////INITIALIZE VARIABLES\\\\\#
+    #//GLOBAL VARIABLES\\#
+    OVERLOADS[0,string] = "ok"
+    OVERLOADS[1,string] = "overloaded!"
+
+    #Manual entries
+    MANUAL = table()
+    MANUAL["manual",string] = "Prints more information about a command. <COMMAND>"
+    MANUAL["help",string] = "Prints out a list of usable commands."
+    MANUAL["version",string] = "Prints out the version into chat."
+    MANUAL["reset",string] = "Resets the E2."
+    MANUAL["check",string] = "Checks the selected entity. <ARG>"
+    MANUAL["set",string] = "Sets the entity to be checked using aimpos or id. <ID>"
+    MANUAL["remove",string] = "Removes the E2."
+
+    #Penetration thingies
+    #Table was made with maximum round length
+    PENS = table()
+    #Cannons
+    PENS["37c",number] = 78 #37mm Cannon @ 900.3 m/s
+    PENS["50c",number] = 112 #50mm Cannon @ 900 m/s
+    PENS["75c",number] = 157 #75mm Cannon @ 900.1 m/s
+    PENS["100c",number] = 204 #100mm Cannon @ 900 m/s
+    PENS["120c",number] = 255 #120mm Cannon @ 900 m/s
+    PENS["140c",number] = 309 #140mm Cannon @ 900 m/s
+    PENS["170c",number] = 390 #170mm Cannon @ 800 m/s
+    #Howitzers
+    PENS["75hw",number] = 96 #75mm Howitzer @ 500 m/s
+    PENS["105hw",number] = 131 #105mm Howitzer @ 400 m/s
+    PENS["122hw",number] = 168 #122mm Howitzer @ 400 m/s
+    PENS["155hw",number] = 213 #155mm Howitzer @ 400 m/s
+    PENS["203hw",number] = 302 #203mm Howitzer @ 400 m/s
+    PENS["240hw",number] = 338 #240mm Howitzer @ 350 m/s
+    PENS["290hw",number] = 451 #290mm Howitzer @ 250 m/s
+    #Autocannons
+    PENS["20ac",number] = 43 #20mm Autocannon @ 900.3 m/s
+    PENS["30ac",number] = 59 #30mm Autocannon @ 900.4 m/s
+    PENS["40ac",number] = 75 #40mm Autocannon @ 900.2 m/s
+    PENS["50ac",number] = 92 #50mm Autocannon @ 900.1 m/s
+    #Semiautomatic Cannons
+    PENS["25sa",number] = 56 #25mm Semiautomatic @ 900.4 m/s
+    PENS["37sa",number] = 68 #37mm Semiautomatic @ 900 m/s
+    PENS["45sa",number] = 90 #45mm Semiautomatic @ 900 m/s
+    PENS["57sa",number] = 115 #57mm Semiautomatic @ 900.2 m/s
+    PENS["76sa",number] = 142 #76mm Semiautomatic @ 900 m/s
+    #Heavy Machineguns
+    PENS["13hmg",number] = 26 #13mm Heavy Machinegun @ 900 m/s
+    PENS["20hmg",number] = 40 #20mm Heavy Machinegun @ 900.4 m/s
+    PENS["30hmg",number] = 56 #30mm Heavy Machinegun @ 900.3 m/s
+    PENS["40hmg",number] = 70 #40mm Heacy Machinegun @ 900 m/s
+    #Machineguns
+    PENS["7.62mg",number] = 13 #7.62mm Machinegun @ 900.9 m/s
+    PENS["12.7mg",number] = 18 #12.7mm Machinegun @ 900 m/s
+    PENS["14.5mg",number] = 23 #14.5mm Machinegun @ 900 m/s
+    PENS["20mg",number] = 29 #20mm Machinegun @ 900.4 m/s
+    #Rotary Autocannons
+    PENS["14.5rac",number] = 30 #14.5mm RAC @ 900.6 m/s
+    PENS["20hrac",number] = 48 #20mm HRAC @ 900.3 m/s
+    PENS["20rac",number] = 40 #20mm RAC @ 900.6 m/s
+    PENS["30hrac",number] = 68 #30mm HRAC @ 900.2 m/s
+    PENS["30rac",number] = 61 #30mm RAC @ 900.1 m/s
+    #Grenade Launchers
+    PENS["40gl",number] = 3 #40mm Grenade Luancher @ 170.5 m/s
+
+    #Used for pulling out the numbers from a string
+    NUMBERS = table()
+    for(N=0,9) {NUMBERS[N:toString(),number] = N} #Create entires for all of the number (0-9) and set their number to that
+    NUMBERS[".",string] = "."
+
+
+
+    #/////FUNCTIONS\\\\\#
+    #[Prints a message in the owner's chat
+    Inputs:
+        Message [STRING] - The message that will be sent
+    ]#
+    function void printOwner(Message:string)
+    {
+        print("[renACFUtilities] "+Message)
+    }
+
+    #[Notifies the owner via a hint
+    Inputs:
+        Message [STRING] - The message that will be hinted
+    ]#
+    function void notifyOwner(Message:string)
+    {
+        hint("[renACFUtilities] "+Message,5.5)
+    }
+
+    #[Prints a message into the owner's console
+    Inputs:
+        Message [STRING] - The message that will be printed into console
+    ]#
+    function void bugOwner(Message:string)
+    {
+        print(_HUD_PRINTCONSOLE,"[renACFUtilities] "+Message)
+    }
+
+    #[Plays a computer processing sound thing
+    ]#
+    function void soundWorking()
+    {
+        soundPlay("working",15,"ambient/computer_working2.wav")
+        soundVolume("working",0.75)
+        soundVolume("working",0,15)
+    }
+
+    #[Plays an error sound
+    ]#
+    function void soundError()
+    {
+        soundPlay("error",0.5,"buttons/button11.wav")
+        soundVolume("error",0.75)
+    }
+
+    #[Plays an confirmation sound
+    ]#
+    function void soundSelection()
+    {
+        soundPlay("selection",0.2,"buttons/blip1.wav")
+        soundVolume("selection",0.5)
+    }
+
+    #[Creates a hologram on the given entity, scaled and coloured
+    Inputs:
+        [ENTITY] - The entity the hologram will be created for
+    ]#
+    function void entity:createHoloSelection()
+    {
+        holoCreate(0,This:pos(),vec(1.15),This:angles(),vec4(255,165,0,100),This:model())
+        holoParent(0,This)
+        holoMaterial(0,"models/ihvtest/eyeball_l")
+    }
+
+    #[Formats seconds into a vector (SS,MM,HH)
+    Inputs:
+        [NUMBER] - Time in seconds
+    Return:
+        [VECTOR] - Time in seconds, minutes, hours vec(S,M,H)
+    ]#
+    function vector number:formatTime()
+    {
+        local Seconds = floor(This%60)
+        local Minutes = floor(This/60)
+        local Hours = floor(Minutes/60)
+        Minutes = floor(Minutes%60)
+        
+        return vec(Seconds,Minutes,Hours)
+    }
+
+    #[For prettyness and ACF 3 forward compatability
+    Inputs:
+        [ENTITY] - The entity to check
+    Return:
+        [NUMBER] - Maximum torque with fuel (In Nm)
+    ]#
+    function number entity:maxTorqueWithFuel()
+    {
+        #ifdef entity:acfMaxTorqueWithFuel()
+            return This:acfMaxTorqueWithFuel()
+        #else
+            return -1
+        #endif
+    }
+    
+    #[Computes the probability of overmatch given a prop and caliber
+    Inputs:
+        [ENTITY] - The prop that will be checked
+        Caliber [NUMBER] - The caliber of weapon that will be checked for
+    ]#
+    function number entity:overmatchCheck(Caliber:number)
+    {
+        return clamp((Caliber/This:acfPropArmorMax() - 1.3)/(7-1.3),0,1)
+    }
+    
+    #[The beef of this thing, does everything
+    Inputs:
+        [ENTITY] - The entity to be chekced
+        Arg [STRING] - An argument.
+    ]#
+    function void entity:checkEnt(Arg:string)
+    {
+        local Type = This:type()
+        switch(Type)
+        {
+            case "acf_engine",
+                local Links = This:acfLinks()
+                bugOwner("Found "+Links:count()+" fuel tanks/batteries.")
+                if(Links:count())
+                {
+                    local FuelTotal = 0
+                    foreach(K,L:entity = Links) {if(L:acfIsFuel()) {FuelTotal += L:acfFuel()}}
+
+                    local FuelUse = This:acfPeakFuelUse()
+                    local Duration = (FuelTotal/FuelUse)*60
+                    local HMSDuration = Duration:formatTime()
+                    local Units = "L"
+                    if(This:acfType() == "Electric") {Units = "kW"}
+
+                    printOwner("Fuel time at max usage - "+HMSDuration[3]+":"+HMSDuration[2]+":"+HMSDuration[1]+" @ "+FuelUse+Units+"/m, w/"+FuelTotal+Units+".")
+                    soundWorking()
+                }
+                else{notifyOwner("No fuel tanks/batteries detected!") soundError()}
+            break
+
+            case "acf_gearbox",
+                local Links = This:acfLinks()
+                local Engines = array()
+                local Wheels = array()
+                foreach(K,E:entity = Links) {if(E:acfIsEngine()) {Engines:pushEntity(E)} else{Wheels:pushEntity(E)}}
+                bugOwner("Found "+Engines:count()+" engine(s) and "+Wheels:count()+" wheel(s).")
+
+                if(Engines:count())
+                {
+                    local EngineTorque = 0
+                    local EngineTorqueWFuel = 0
+                    foreach(I,E:entity = Engines) {EngineTorque += E:acfMaxTorque() EngineTorqueWFuel += E:maxTorqueWithFuel()}
+                    local GearboxMaxTorque = This:acfTorqueRating()
+                    local TorqueAssesment = OVERLOADS[EngineTorque>GearboxMaxTorque,string]
+                    local TorqueFuelAssesment = OVERLOADS[EngineTorqueWFuel>GearboxMaxTorque,string]
+                    
+                    printOwner("No fuel: "+TorqueAssesment+" @ "+EngineTorque+" Nm, Fuel: "+TorqueFuelAssesment+" @ "+EngineTorqueWFuel+" Nm; "+GearboxMaxTorque+" Nm.")
+                    soundWorking()
+                }
+                else{notifyOwner("No engines detected!") soundError()}
+            break
+
+            case "prop_physics",
+                local Weapon = Arg
+                if(!Arg) {Weapon = "120c"} #Default to 120mm cannon
+                if(PENS:exists(Weapon))
+                {
+                    local CaliberS = ""
+                    foreach(K,N:string = Weapon:explode("")) {if(NUMBERS:exists(N)) {CaliberS += N}} #Pulls out the numbers and periods to make a number
+                    local Caliber = CaliberS:toNumber()
+                    local MaxPen = PENS[Weapon,number]
+                    local OvermatchProb = This:overmatchCheck(Caliber)
+                    
+                    printOwner("Overmatch probability "+round(OvermatchProb*100,3)+"% w/"+Weapon+" @ "+MaxPen+"mm pen; "+This:acfPropArmorMax()+"mm armor.")
+                    soundWorking()
+                }
+                else {notifyOwner(Arg+" is not a valid weapon, please check the E2 for a list of valid weapons.") soundError()}
+            break
+
+            default,
+                notifyOwner(Type+" is not an entity supported by this E2.")
+                soundError()
+            break
+        }
+    }
+
+
+
+    #/////FINALIZE\\\\\#
+    #//MISC\\#
+    runOnChat(1)
+
+
+    #//VERSION\\#
+    VERSION = "V1.0.0"
+    setName("renACFUtilities "+VERSION)
+
+
+    #//CHECK-ON-SPAWN\\#
+    Ent = entity():isWeldedTo()
+    if(Ent:isValid()) {Ent:checkEnt("")} else{notifyOwner("Use 'help' for a list of commands and 'manual <COMMAND>' to learn how to use them.")}
+}
+
+
+
+#//////////CHAT COMMANDS\\\\\\\\\\#
+elseif(chatClk(owner()))
+{
+    local Said = owner():lastSaid():lower()
+    local Split = Said:explode(" ")
+    local Command = Split[1,string]
+    local Arg = Split[2,string]
+
+    switch(Command)
+    {
+        #manual - Prints out useful information about a command
+        case "manual",
+            if(MANUAL:exists(Arg)) {printOwner(Arg+": "+MANUAL[Arg,string])}
+            else{notifyOwner("No manual entry found for "+Arg+", please use 'help' for a list of commands.")}
+            hideChat(1)
+        break
+
+        #help - Provides a list of available commands
+        case "help",
+            printOwner("Commands: manual, help, version, reset, check, set, remove.")
+            hideChat(1)
+        break
+
+        #version - Prints out the version of the E2
+        case "version",
+            printOwner(VERSION)
+            hideChat(1)
+        break
+
+        #reset - Resets the E2
+        case "reset",
+            notifyOwner("Resetting.")
+            hideChat(1)
+            reset()
+        break
+
+        #check - Performs a check of the selected entity
+        case "check",
+            Ent:checkEnt(Arg)
+            hideChat(1)
+        break
+
+        #set - Changes the currently selected entity
+        case "set",
+            if(Arg)
+            {
+                Ent = entity(Arg:toNumber())
+            }
+            else
+            {
+                Ent = owner():aimEntity()
+            }
+            
+            notifyOwner("Entity now set to "+Ent:type()+" ["+Ent:id()+"].")
+            
+            hideChat(1)
+        break
+
+        #remove - Removes the e2
+        case "remove",
+            notifyOwner("Removing E2.")
+            hideChat(1)
+            selfDestruct()
+        break
+    }
+}
+
+
+
+#//////////SELECTION MISC\\\\\\\\\\#
+if(changed(Ent))
+{
+    Ent:createHoloSelection()
+
+    soundSelection()
+
+    setName("renACFUtilites "+VERSION+"\n"+
+    "Selected: "+Ent:type()+" ["+Ent:id()+"]")
+}

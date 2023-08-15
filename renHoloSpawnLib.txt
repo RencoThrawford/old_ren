@@ -1,0 +1,158 @@
+@name renHoloSpawnLib
+@persist [RenHSL_VERSION]:string
+#[
+E2 Library By:
+    Renco - Everything
+
+!!!!!
+I GUESS YOU CAN RE-DISTRIBUTE
+!!!!!
+
+
+
+//////////VERSION LOG\\\\\\\\\\
+V0.0.0 (11-26-20) - Initial Development
+V0.0.1 (11-26-20) -
+    [ADDED] table renHLSSpawn(table,array) - Spawns holograms
+    [ADDED] table table:renHLSP2HConvert() - Converts pac/prop to holo to a form usable by this library
+
+
+
+//////////NOTES\\\\\\\\\\
+[in] [NUMBER] Index; Index of the hologram
+[re] [ENTITY]|[NUMBER] Relative; toWorld()
+[po] [VECTOR3] Position; Position of the hologram
+[sc] [VECTOR3] Scale; Scale of the hologram
+[an] [ANGLE] Angle; Angle of the hologram
+[co] [VECTOR4] Colour; Colour and or alpha of the hologram
+[mo] [STRING] Model; Model of the hologram
+[pa] [ENTITY]|[NUMBER] Parent; Parents the hologram to an entity or a hologram
+[sh] [NUMBER] Shadow; Enables shadows
+[ds] [NUMBER] Disable Shading; Disables shading for a glow-in-the-dark effect
+[ma] [STRING] Material; Texture of the hologram
+[fx] [NUMBER] Render FX; Changes the render fx for the hologram
+[sk] [NUMBER] Skin; Changes the skin of the hologram
+[bg] [ARRAY] Bodygroup; Changes the bodygroup(s) of the hologram
+    Use vector 2's to define bodygroups
+    [1] Bodygroup ID
+    [2] Bodygroup SubID
+[pc] [VECTOR3] Player Color; Changes the sub color of the hologram
+
+
+
+//////////TO-DO\\\\\\\\\\
+Better sound for spawning
+Clip Support
+
+/////DONE\\\\\
+Add a converter for pac2holo
+]#
+
+
+#//////////VARIABLES\\\\\\\\\#
+RenHSL_VERSION = "V0.0.1"
+
+
+
+#//////////FUNCTIONS\\\\\\\\\#
+#[This function creates holograms from a table, see /NOTES\ for details
+Intended to run constantly until the input table entry count = 0
+Inputs:
+    Holograms [TABLE] - Your hologram table
+    LastReturn [TABLE] - What the function returned (OPTIONAL: USE table())
+Return:
+    [TABLE] - Builds a table of hologram indexes, and entities
+]#
+function table renHSLSpawn(Holograms:table,LastReturn:table)
+{
+    local Return = LastReturn
+
+    if(holoCanCreate())
+    {
+        local Current = Holograms:popTable()
+
+        if(Current:exists("in"))
+        {
+            local CurIndex = Current["in",number]
+
+            local Types = Current:typeids()
+            
+            holoCreate(CurIndex)
+
+            if(Current:exists("po")) {holoPos(CurIndex,Current["po",vector])}
+
+            if(Current:exists("sc")) {holoScale(CurIndex,Current["sc",vector])}
+
+            if(Current:exists("an")) {holoAng(CurIndex,Current["an",angle])}
+
+            if(Current:exists("co")) {holoColor(CurIndex,Current["co",vector4])}
+
+            if(Current:exists("mo")) {holoModel(CurIndex,Current["mo",string])}
+
+            #if(Current:exists("pa")) {holoParent(Cur)}
+
+            if(Current:exists("sh")) {holoShadow(CurIndex,Current["sh",number])}
+
+            if(Current:exists("ds")) {holoDisableShading(CurIndex,Current["ds",number])}
+
+            if(Current:exists("ma")) {holoMaterial(CurIndex,Current["ma",string])}
+
+            if(Current:exists("fx")) {holoRenderFX(CurIndex,Current["fx",number])}
+
+            if(Current:exists("sk")) {holoSkin(CurIndex,Current["sk",number])}
+
+            if(Current:exists("bg"))
+            {
+                for(BG=1,Current["bg",array]:count())
+                {
+                    local Cur = Current["bg",array][BG,vector2]
+                    holoBodygroup(CurIndex,Cur[1],Cur[2])
+                }
+            }
+
+            if(Current:exists("pc")) {holoPlayerColor(CurIndex,Current["pc",vector])}
+
+            entity():soundPlay("renhsl_spawn", 0, "@^garrysmod/content_downloaded.wav", 0.212)
+
+            Return["in",array]:pushNumber(CurIndex)
+            Return["en",array]:pushEntity(holoEntity(CurIndex))
+        }
+    }
+
+    return Return
+}
+
+#[This function converts prop/pac 2 holo data to a table usable for this library
+Inputs:
+    [TABLE] - The H2P table
+    Clips [TABLE] - The table of clips, if none use table()
+Return:
+    [TABLE] - Table for use with this library
+]#
+function table table:renHLSP2HConvert(Clips:table)
+{
+    local Return = table()
+
+    for(I=1,This:count())
+    {
+        local Temp = table()
+
+        #table(Index, Local Entity (Entity:toWorld()), Parent Entity, ScaleType (Default 0), Pos, Ang, Scale, Model, Material, Color, Skin)
+        #table(Index, Clip Index, Pos, Ang)
+
+        Temp["in",number] = This[1,number]
+        Temp["re",entity] = This[2,entity]
+        Temp["po",vector] = This[5,vector]
+        Temp["sc",vector] = This[7,vector]
+        Temp["an",angle]  = This[6,angle]
+        Temp["co",vector4] = This[10,vector4]
+        Temp["mo",string] = This[8,string]
+        Temp["pa",entity] = This[3,entity]
+        Temp["ma",string] = This[9,string]
+        Temp["sk",number] = This[11,number]
+
+        Return:pushTable(Temp)
+    }
+
+    return Return
+}

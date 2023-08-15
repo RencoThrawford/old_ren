@@ -1,0 +1,130 @@
+@name renHoloHelper
+@persist [RefEnt Ent]:entity
+@persist [VERSION]:string
+@persist [CodeMode]:number
+@trigger none
+@model models/props_lab/reciever_cart.mdl
+#//////////INITIALIZATION\\\\\\\\\\#
+#Reset the E2 if we have been duped or the dupe has finished spawning
+if(duped()|dupefinished()) {reset()}
+
+#Don't turn your back on a friend
+if(first())
+{
+    CodeMode = 0
+    
+    runOnChat(1)
+    
+    function void ownerNotify(Message:string)
+    {
+        hint("[renHoloHelper] "+Message,5.5)
+    }
+    
+    function void ownerTell(Message:string)
+    {
+        print("[renHoloHelper] "+Message)
+    }
+    
+    function ranger ownerTrace()
+    {
+        local Return = noranger()
+        rangerPersist(1)
+        rangerReset()
+        rangerFilter(players())
+        rangerHitWater(0)
+        rangerIgnoreWorld(1)
+        for(T=1,5)
+        {
+            local Ranger = rangerOffset(100,owner():shootPos(),owner():eye())
+            if(Ranger:entity():acfHitClip(Ranger:pos())) {rangerFilter(Ranger:entity())} else{Return = Ranger break}
+        }
+        return Return
+    }
+    
+    function void entity:createHoloSelection(Ent:number)
+    {
+        local Color = vec4(255,100,100,100)
+        if(Ent) {Color = vec4(100,255,100,100)}
+        holoCreate(Ent,This:toWorld(vec(0)),vec(1.15),This:toWorld(ang(0)),Color,This:model())
+        holoParent(Ent,This)
+        holoMaterial(Ent,"models/ihvtest/eyeball_l")
+        holoDisableShading(Ent,1)
+    }
+    
+    function string format(Vector:vector) {local Vec = round(Vector,6) return "("+Vec:x()+","+Vec:y()+","+Vec:z()+")"}
+    
+    function string format(Vector4:vector4) {local Vec4 = round(Vector4,6) return "("+Vec4:x()+","+Vec4:y()+","+Vec4:w()+")"}
+    
+    function string format(Angle:angle) {local Ang = round(Angle,6) return "("+Ang:pitch()+","+Ang:yaw()+","+Ang:roll()+")"}
+    
+    function void soundWorking() {soundPlay("working",15,"ambient/computer_working2.wav") soundVolume("working",0.75) soundVolume("working",0,15)}
+
+    function void soundSelection() {soundPlay("selection",0.2,"buttons/blip1.wav") soundVolume("selection",0.5)}
+    
+    function void entity:check(Entity:entity,Code:number)
+    {
+        local VecFormat = format(This:toLocal(Entity:pos()))
+        local AngFormat = format(This:toLocal(Entity:angles()))
+        if(Code)
+        {
+            ownerTell("holoCreate(Index,RefEnt:toWorld(vec"+VecFormat+"),vec(1),RefEnt:toWorld(ang"+AngFormat+"),vec4"+format(Entity:getColor4())+",'"+Entity:model()+"')")
+            ownerTell("holoParent(Index,RefEnt)")
+            ownerTell("Index++")
+        }
+        else
+        {
+            ownerTell("vec"+VecFormat+", "+"ang"+AngFormat+".")
+        }
+        soundWorking()
+    }
+    
+    VERSION = "V0.0.0"
+    setName("renHoloHelper "+VERSION)
+}
+
+elseif(chatClk(owner()))
+{
+    local Said = owner():lastSaid():lower()
+    local Split = Said:explode(" ")
+    local Command = Split:string(1)
+    local Arg1 = Split:string(2)
+    
+    switch(Command)
+    {
+        case "ref",
+        case "parent",
+            if(Arg1) {RefEnt = entity(Arg1:toNumber())} else{RefEnt = ownerTrace():entity()}
+            RefEnt:createHoloSelection(0)
+            soundSelection()
+            ownerNotify("Refrence entity now set to "+RefEnt:type()+" ["+RefEnt:id()+"].")
+            hideChat(1)
+        break
+
+        case "ent",
+            if(Arg1) {Ent = entity(Arg1:toNumber())} else{Ent = ownerTrace():entity()}
+            Ent:createHoloSelection(1)
+            soundSelection()
+            ownerNotify("Entity now set to "+Ent:type()+" ["+Ent:id()+"].")
+            hideChat(1)
+        break
+        
+        case "check",
+            RefEnt:check(Ent,CodeMode)
+            hideChat(1)
+        break
+        
+        case "code",
+            CodeMode = !CodeMode
+            ownerNotify("Toggling code mode "+(CodeMode ? "on" : "off")+".")
+            hideChat(1)
+        break
+    }
+}
+
+if((changed(RefEnt)|changed(Ent))&(RefEnt:isValid()&Ent:isValid()))
+{
+    RefEnt:check(Ent,CodeMode)
+    setName("renHoloHelper "+VERSION+"\n"+
+    "Ref: "+RefEnt:type()+" ["+RefEnt:id()+"]"+"\n"+
+    "Ent: "+Ent:type()+" ["+Ent:id()+"]")
+}
