@@ -1,0 +1,338 @@
+@name renAMS
+@inputs [MSGBUS]:table
+@inputs [Weapon]:entity
+@outputs [Fire Reload]:number
+@persist [RELOADDUR]:number [RELOADSOUND]:string [FIRINGRANGE]:vector2
+@persist [BALLISTICS_FREQUENCY TURRET_FREQUENCY MISC_FREQUENCY PARENT_FREQUENCY BEEP_FREQUENCY]:number
+@outputs [Alert_Level]:number [Velocity Counter_Target Counter_Speed]:vector [Gunner]:entity [Radar_Data]:array
+@persist [REFELEVATION REFTABLE]:number [VERSION]:string [TURRETSETTINGS]:array
+@outputs [Range Ready LastEngagement AlarmPlayed]:number [TurretFloating]:angle [TargetSpeed BallisticSolution TurretTarget]:vector [Table]:array
+@trigger [MSGBUS]
+@model models/sprops/cuboids/height06/size_4/cube_24x24x6.mdl
+#[
+E2 By:
+    Renco - Everything
+
+!!!!!
+REALLY DO-NOT RE-DISTRIBUTE!
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+An E2 to shoot down missile so you dont have to
+(I don't condone the use of this on litterally everything)
+
+
+
+//////////VERSION LOG\\\\\\\\\\
+V0.0.0 (01-24-21) - Initial Development
+V1.0.0 (01-24-21) - Functionally Complete
+
+
+//////////TO-DO\\\\\\\\\\
+
+/////DONE\\\\\
+
+
+
+//////////MSGBUS\\\\\\\\\\
+/////MSGBUS INPUTS\\\\\
+GUNNER           [ENTITY] - Gunner controlling guns
+VELOCITY         [VECTOR] - Current velocity of the vehicle
+ALERT_LEVEL      [NUMBER] - Alert level of systems
+COUNTER_TARGET   [VECTOR] - Target to attempt CIWS against
+COUNTER_SPEED    [VECTOR] - Target velocity to attempt CIWS against
+RADAR_DATA        [ARRAY] - Data from radar
+
+/////MSGBUS OUTPUTS\\\\\
+
+]#
+
+
+#//////////INITIALIZATION\\\\\\\\\\#
+#Reset the E2 if we have been duped or the dupe has finished spawning
+if(duped()|dupefinished()) {reset()}
+
+#Strategic Air Midnight
+if(first())
+{
+    #/////SETTINGS\\\\\#
+    #//FIRING\\#
+    #Firing range to fire the gun; vec2(Min,Max)
+    FIRINGRANGE = vec2(5,100) #Default: vec2(5,100)
+
+
+    #//SOUNDS\\#
+    #Sound that plays when reloading
+    RELOADSOUND = "acf_mikespack_two/combat/armored_warfare/reloads/20mm_reload.wav" #Default: "acf_mikespack_two/combat/armored_warfare/reloads/20mm_reload.wav"
+    
+    #Duration of said reload sound
+    RELOADDUR = 2.9 #Default: 2.9
+
+
+    #//CAMO\\#
+    #Color of camo to use
+    local CamoCol = "yellow" #Default: "yellow"
+    
+    #Material to use when using green or purple camos
+    local CamoMat = "" #Default: ""
+
+
+    #//MISC\\#
+    #Changes at what index the holograms start to spawn at
+    local Index = 0 #Default: 0
+
+
+
+    #/////LIBRARIES\\\\\#
+    #include "renFCSLib"
+    #include "renHPTurretLib"
+    #include "renHoloCamoLib"
+
+
+
+    #/////INITIALIZE VARIABLES\\\\\#
+    #//FREQUENCIES\\#
+    #Frequency for calculating ballistics
+    BALLISTICS_FREQUENCY = 50 #Default: 50
+    #Frequency for moving the turret
+    TURRET_FREQUENCY = 75 #Default: 75
+    #Frequency for reloading, etc
+    MISC_FREQUENCY = 250 #Default: 250
+    #Frequenct for parenting the gun
+    PARENT_FREQUENCY = 50 #Default: 50
+    #Frequency at which the E2 beeps on proximity of the target missile
+    BEEP_FREQUENCY = 750 #Default: 750
+
+
+
+    #/////HOLOGRAMS\\\\\#
+    local Camos = array()
+    local Azimuth = 0
+    local Elevation = 0
+    local TraverseMin = ang(0)
+    local TraverseMax = ang(0)
+    local TraverseRate = ang(0)
+    local TraverseSound = ""
+    switch(entity():model())
+    {
+        #Micro Phalanx
+        #ACCURACY BY VOLUME
+        case "models/sprops/cuboids/height06/size_4/cube_24x24x6.mdl",
+            TraverseMin = ang(-15,-180,0)
+            TraverseMax = ang(80,180,0)
+            TraverseRate = ang(43,50,0)
+            TraverseSound = "acf_extra/tankfx/turret5.wav"
+
+            #Azimuth Base
+            local TurretAzimuth = holoCreate(Index,entity():toWorld(vec(0,0,3)),vec(0),entity():toWorld(ang(0)),vec4(0),"plane")
+            holoParent(Index,entity())
+            Azimuth = Index
+            Index++
+
+            #Azmuth Base
+            holoCreate(Index,TurretAzimuth:toWorld(vec(0)),vec(1),TurretAzimuth:toWorld(ang(0,0,90)),vec4(255),"models/sprops/geometry/t_fdisc_24.mdl")
+            holoParent(Index,Azimuth)
+            Camos:pushNumber(Index)
+            Index++
+
+            #Left Holder
+            holoCreate(Index,TurretAzimuth:toWorld(vec(0,6,8.55)),vec(1),TurretAzimuth:toWorld(ang(0)),vec4(255),"models/sprops/geometry/t_qhex_36.mdl")
+            holoParent(Index,Azimuth)
+            Camos:pushNumber(Index)
+            Index++
+
+            #Right Holder
+            holoCreate(Index,TurretAzimuth:toWorld(vec(0,-6,8.55)),vec(1),TurretAzimuth:toWorld(ang(0)),vec4(255),"models/sprops/geometry/t_qhex_36.mdl")
+            holoParent(Index,Azimuth)
+            Camos:pushNumber(Index)
+            Index++
+
+
+            #Elevation Base
+            local TurretElevation = holoCreate(Index,entity():toWorld(vec(-4.4,0,15.75)),vec(0),entity():toWorld(ang(0)),vec4(0),"plane")
+            holoParent(Index,Azimuth)
+            Elevation = Index
+            Index++
+
+            #Elevation Base
+            holoCreate(Index,TurretElevation:toWorld(vec(0)),vec(1),TurretElevation:toWorld(ang(0,0,90)),vec4(255),"models/sprops/cylinders/size_2/cylinder_3x18.mdl")
+            holoParent(Index,Elevation)
+            Camos:pushNumber(Index)
+            Index++
+
+            #Gun Box
+            holoCreate(Index,TurretElevation:toWorld(vec(-4.75,0,0)),vec(0.15,0.2,0.2),TurretElevation:toWorld(ang(90,0,0)),vec4(255),"models/props_phx/construct/metal_tube.mdl")
+            holoParent(Index,Elevation)
+            Camos:pushNumber(Index)
+            Index++
+
+            #Ammo Holder
+            holoCreate(Index,TurretElevation:toWorld(vec(3,0,-6.9)),vec(0.24,0.5,0.24),TurretElevation:toWorld(ang(0,90,0)),vec4(100,100,100,255),"models/xeon133/racewheel/race-wheel-30.mdl")
+            holoParent(Index,Elevation)
+            holoMaterial(Index,"WTP/metal_5")
+            Index++
+
+            #Radar Holder
+            holoCreate(Index,TurretElevation:toWorld(vec(0,0,6)),vec(0.75,0.75,2),TurretElevation:toWorld(ang(0)),vec4(255),"models/holograms/hq_rcylinder_thick.mdl")
+            holoParent(Index,Elevation)
+            holoMaterial(Index,"WTP/metal_5")
+            holoClipEnabled(Index,1)
+            holoClip(Index,vec(0,0,-2.55),vec(0,0,1),0)
+            Index++
+
+            #IR Camera
+            holoCreate(Index,TurretElevation:toWorld(vec(0,4.2,10)),vec(0.25),TurretElevation:toWorld(ang(0)),vec4(255),"models/dav0r/camera.mdl")
+            holoParent(Index,Elevation)
+            Index++
+        break
+    }
+
+    #Elevation reference
+    holoCreate(Index,Weapon:massCenter(),vec(0),ang(0),vec4(0),"plane")
+    holoParent(Index,Weapon)
+    REFELEVATION = Index
+    Index++
+    REFTABLE = Index
+
+
+
+    #/////FUNCTIONS\\\\\#
+    #[Grabs stuff from the MSGBUS
+    ]#
+    function void msgBusIn()
+    {
+        if(->MSGBUS)
+        {
+            Gunner = MSGBUS["GUNNER",entity]
+            Velocity = MSGBUS["VELOCITY",vector]
+            Alert_Level = MSGBUS["ALERT_LEVEL",number]
+            Counter_Target = MSGBUS["COUNTER_TARGET",vector]
+            Counter_Speed = MSGBUS["COUNTER_SPEED",vector]
+            Radar_Data = MSGBUS["RADAR_DATA",array]
+        }
+    }
+
+    #[Notifies the Gunner of a message
+    Inputs:
+        Message [STRING] - The message to be sent to the gunner
+    ]#
+    function void operatorNotify(Message:string) {Gunner:vehicle():hintDriver("[renAMS] "+Message,5.5)}
+
+    #[Checks to see if a number is in the range of a vec2 instead of using two numbers (Cleaner)
+    Inputs:
+        Number [NUMBER] - Number to check if inrange
+        MinMax [VECTOR2] - vec2(Minimum,Maximum)
+    Return:
+        [NUMBER] - 1/0 inrange of MinMax
+    ]#
+    function number inrange(Number:number,MinMax:vector2) {return inrange(Number,MinMax[1],MinMax[2])}
+
+
+
+    #/////FINALIZE\\\\\#
+    #//MISC\\#
+    runOnLast(1)
+    Camos:renHCLHoloE2(CamoCol,CamoMat)
+    
+    #//TURRET STUFF\\#
+    Weapon:soundPlay("weapon",0,TraverseSound),soundVolume("weapon",0)
+    local TurretTraverses = renHPTLFormatTraverse(TraverseMin,TraverseMax)
+    TURRETSETTINGS = array(TurretTraverses[1,angle],TurretTraverses[2,angle],TraverseRate,entity(),Elevation,Azimuth,0)
+    Table = renFCSLTableCreate(Weapon,REFTABLE)
+
+    #//VERSIONING\\#
+    VERSION = "V1.0.0"
+    setName("renAMS "+VERSION)
+
+    #//FINALIZE MSGBUS\\#
+    MSGBUS["NODE_NAMES",array]:pushString(entity():getName())
+    msgBusIn()
+}
+
+elseif(inputClk())
+{
+    msgBusIn()
+    if(changed(Gunner)&Gunner&(!Ready)) {timer("parent",PARENT_FREQUENCY)}
+}
+
+elseif(clk("ballistics"))
+{
+    timer("ballistics",BALLISTICS_FREQUENCY)
+
+    if(Alert_Level)
+    {
+        holoAng(REFELEVATION,ang(0,Weapon:angles():yaw(),0))
+
+        Range = ((Weapon:massCenter() - Counter_Target):setZ(0):length())/RenFCSL_CONVERT
+        local AdjustedRange = Range-abs(holoEntity(REFELEVATION):elevation(Counter_Target)/RenFCSL_CONVERT)
+
+        if(changed(Counter_Target)&Counter_Target) {TargetSpeed = $Counter_Target}
+        local Lookup = renFCSLTableInterpolate(Table,AdjustedRange)
+        local GunDrift = (Velocity * Lookup[2])
+        local LeadDrift = ((TargetSpeed*150) * Lookup[2])
+        local Opposite = renFCSLFindOpposite(AdjustedRange,Lookup[1])
+
+        BallisticSolution = vec(0,0,Opposite) - ((GunDrift-LeadDrift)*(((TURRET_FREQUENCY+BALLISTICS_FREQUENCY)/1000)+tickInterval()))
+    }
+}
+
+elseif(clk("turret"))
+{
+    timer("turret",TURRET_FREQUENCY)
+
+    if(Alert_Level) {TurretTarget = Counter_Target+BallisticSolution}
+    elseif(Radar_Data:count()) {TurretTarget = Radar_Data[1,entity]:boxCenterW()}
+    else{TurretTarget = entity():pos()+(((entity():up()/5)+entity():forward())*9999)}
+
+    if(Ready)
+    {
+        TurretFloating = Weapon:renHPTLAim(
+            TURRETSETTINGS[1,angle],
+            TURRETSETTINGS[2,angle],
+            TurretFloating,
+            TURRETSETTINGS[3,angle],
+            TurretTarget,
+            TURRET_FREQUENCY/1000,
+            TURRETSETTINGS[4,entity],
+            TURRETSETTINGS[5,number],
+            TURRETSETTINGS[6,number],
+            TURRETSETTINGS[7,number]
+        )
+        
+        Weapon:renHPTLTraverseSound("weapon",TurretTarget)
+
+        Fire = Alert_Level&Weapon:renHPTLLogicalInterlock(TurretTarget,0)&inrange(Range,FIRINGRANGE)
+
+        if(changed(Weapon:acfAmmoCount())&(!Weapon:acfReady())) {local Time = Weapon:renHPTLReloadSoundTime(RELOADDUR) if(Time != -1) {timer("reload",Time)}}
+    }
+}
+
+elseif(clk("misc"))
+{
+    timer("misc",MISC_FREQUENCY)
+
+    if(Alert_Level) {Reload = 0 LastEngagement = curtime() if(!AlarmPlayed) {AlarmPlayed = 1 soundPlay("alarm",0,"ambient/alarms/alarm1.wav"),soundPitch("alarm",100),soundVolume("alarm",0.5)}}
+    elseif((curtime()-LastEngagement)>10) {Reload = (Weapon:acfMagRounds() < Weapon:acfMagSize())}
+    else{if(AlarmPlayed) {AlarmPlayed = 0 soundStop("alarm")}}
+    
+    if(changed(Weapon:acfRoundType())) {Table = renFCSLTableCreate(Weapon,REFTABLE)}
+}
+
+elseif(clk("parent"))
+{
+    Ready = Weapon:renHTPLParentHolo(TURRETSETTINGS[5,number],Weapon:massCenterL(),ang(0),0,0)
+
+    if(!Ready) {timer("parent",PARENT_FREQUENCY)} else{stoptimer("parent") operatorNotify("Finished parenting!") timer("ballistics",BALLISTICS_FREQUENCY),timer("turret",TURRET_FREQUENCY),timer("misc",MISC_FREQUENCY),timer("beep",BEEP_FREQUENCY)}
+}
+
+elseif(clk("beep"))
+{
+    timer("beep",BEEP_FREQUENCY)
+    if(Alert_Level) {soundPlay("beep",0.3,"acf_mikespack_two/combat/beeps/beep2.wav"),soundPitch("beep",clamp((FIRINGRANGE[2]/Range)*80,50,150)),soundVolume("beep",0.8)}
+}
+
+elseif(clk("reload")) {Weapon:soundPlay("reload",RELOADDUR,RELOADSOUND)}
+
+if(last()) {Weapon:deparent()}

@@ -1,0 +1,258 @@
+@name renHPTurretLib
+@persist [RenHPTL_MaxThreshold RenHPTL_MaxVolume RenHPTL_VolumeDivisor]:number [RenHPTL_MinHeading]:angle
+@persist [RenHPTL_VERSION]:string
+@autoupdate on
+#[
+E2 Library By:
+    Renco - Everything
+
+!!!!!
+RE-DISTRIBUTE I GUESS
+!!!!!
+
+
+
+//////////NOTES\\\\\\\\\\
+A common library for holo parent turret related things
+
+
+
+//////////VERSION LOG\\\\\\\\\
+V0.0.0 (10-26-20) - Initial Devloplment
+V1.0.0 (12-07-20)
+    [UPDATED] renHPTLAim(); Now has Parent input to allow pintle mounted guns
+V1.0.1 (12-28-20)  
+    [UPDATED] number entity:renHPTLParentHolo(number,number), now utilizes number entity:renHTPLParentHolo(number,vector,angle,number); used for backwards compatability
+    [ADDED] number entity:renHTPLParentHolo(number,vector,angle,number), like the original but with offset ability
+    [FIXED] Fixed potential issue with renHTPLParentHolo not returning 1 when unable to use propcore
+V1.0.2 (12-30-20)
+    [UPDATED] Simplified renHPTLFormatTraverse
+    [ADDED] If both ang and pos is ignored, parent anyway
+    [ADDED] entity:renHPTLTraverseSound(number,vector); Modifies the volume of a sound using the difference via heading
+    [ADDED] entity:renHPTLTraverseSound(string,vector); Ditto; uses a string index instead of a number
+    [FXIED] Fixed parentHolo not moving the entity to the correct position/angles with offset
+V1.0.3 (01-09-21)
+    [ADDED] number entity:renHPTLReloadSoundTime(number); Returns the amount of time in miliseconds to wait for a reload sound (Returns -1 when not reloading)
+
+
+
+//////////TO-DO\\\\\\\\\\
+Check to see if the bore is clear
+
+/////DONE\\\\\#
+Add defineable parent for turrets
+]#
+
+
+#//////////VARIABLES\\\\\\\\\#
+RenHPTL_MinHeading = ang(2)
+RenHPTL_MaxThreshold = 0.01
+RenHPTL_MaxVolume = 0.75
+RenHPTL_VolumeDivisor = 5
+
+RenHPTL_VERSION = "V1.0.3"
+
+
+
+#/////////FUNCTIONS\\\\\\\\\#
+#[Performs several checks such as..
+If the gun is on target!
+...And many more!
+Inputs:
+    THIS [ENTITY] - The gun (Or prop) to check
+    Target [VECTOR] - Target position
+    Override [NUMBER] - Ignores interlock and fires anyway
+Return:
+    [NUMBER] - Wether or not you should fire
+]#
+function number entity:renHPTLLogicalInterlock(Target:vector,Override:number)
+{
+    local Return = 0
+
+    if(Override|!This:acfMagRounds()) {Return++}
+
+    else
+    {
+        local TargetHeading = This:heading(Target)
+
+        local MinHeading = RenHPTL_MinHeading
+
+        if(This:acfIsGun())
+        {
+            MinHeading = ang(This:acfSpread() / 2)
+        }
+
+        if(TargetHeading < MinHeading) {Return++}
+    }
+
+    return Return
+}
+
+#[Checks the positions and angles of the entity to the holo, parents them if theyre within a certain threshold
+Also has a failsafe if the server dosent have propcore enabled and we need to move entities
+Now with offsets for positions and angles!
+Inputs:
+    [ENTITY] - The entity you wish to parent to the hologram
+    Index [NUMBER] - Hologram index
+    OffsetPos [VECTOR] - Position offset of the entity to be parented
+    OffsetAng [ANGLE]  - Angle offset of the entity to be parented
+    IgnoreAng [NUMBER] - Ignores anything to do with angles
+    IgnorePos [NUMBER] - Ignores anything to do with positions
+Return:
+    [NUMBER] - Parent successful
+]#
+function number entity:renHTPLParentHolo(Index:number,OffsetPos:vector,OffsetAng:angle,IgnoreAng:number,IgnorePos:number)
+{
+    local Entity = holoEntity(Index)
+    local Return = 0
+
+    if(This:isValid())
+    {
+        #ifdef entity:propFreeze(number)
+            if(!This:isFrozen()) {This:propFreeze(1)}
+        #endif
+
+        if(This:parent()==Entity) {Return++}
+        
+        elseif(IgnoreAng&IgnorePos) {This:parentTo(Entity) Return++ soundPlay("renhptl_success",0.75,"buttons/bell1.wav")}
+
+        else
+        {
+            local EntityPos = Entity:pos()
+            local EntityAng = Entity:angles()
+
+            local PosDiff = This:toWorld(OffsetPos)-EntityPos
+            local AngDiff = This:toWorld(OffsetAng)-EntityAng
+
+            if((inrange(PosDiff,vec(-RenHPTL_MaxThreshold),vec(RenHPTL_MaxThreshold))|IgnorePos) & (inrange(AngDiff,ang(-RenHPTL_MaxThreshold),ang(RenHPTL_MaxThreshold))|IgnoreAng))
+            {
+                This:parentTo(Entity)
+
+                Return++
+
+                soundPlay("renhptl_success",0.75,"buttons/bell1.wav")
+            }
+
+            else
+            {
+                #ifdef entity:setPos(vector)
+                    if(!IgnoreAng) {This:setAng(This:angles()-AngDiff)}
+                    if(!IgnorePos) {This:setPos(This:pos()-PosDiff)}
+                #else
+                    This:parentTo(Entity)
+
+                    Return++
+
+                    hint("[renHPTurretLib] Unable to use propcore, parenting.",5.5)
+
+                    soundPlay("renhptl_success",0.75,"buttons/bell1.wav")
+                #endif
+            }
+        }
+    }
+    
+    return Return
+}
+
+#[Used for backwards compatability with older vrsion of renHPTurret or simplicity, whatever
+Inputs:
+    [ENTITY] - The entity you wish to parent to the hologram
+    Index [NUMBER] - Hologram index
+    IgnoreAng [NUMBER] - Ignores anything to do with angles
+Return:
+    [NUMBER] - Parent successful
+]#
+function number entity:renHPTLParentHolo(Index:number,IgnoreAng:number)
+{
+    return This:renHTPLParentHolo(Index,vec(0),ang(0),IgnoreAng,0)
+}
+
+#[Certified red magic, formats minimum and maximum angles into minimum and maximum traverses
+Inputs:
+    Min [ANGLE] - The minimum traverse values
+    Max [ANGLE] - The maximum traverse values
+Return:
+    [ARRAY] - Formatted traverse values
+        [1,ANGLE] - Minimum traverse
+        [2,ANGLE] - Maximum traverse
+]#
+function array renHPTLFormatTraverse(Min:angle,Max:angle)
+{
+    local MinP = min(Min[1],Max[1])
+    local MinY = min(Min[2],Max[2])
+    local MaxP = max(Min[1],Max[1])
+    local MaxY = max(Min[2],Max[2])
+
+    return array(ang(-MaxP,MinY,0),ang(-MinP,MaxY,0))
+}
+
+#[Presumably red's, no documentation when I got it
+Inputs:
+                  [ENTITY] - The gun entity
+    Min           [ANGLE]  - The minimum traverse
+    Max           [ANGLE]  - The maximum traverse
+    FloatingAngle [ANGLE]  - Feed the output of this function into this
+    DegreesPerSecond [ANGLE] - Traverse rate
+    Aimpos      [VECTOR] - Aimpos; it's where we're aiming
+    Timestep    [NUMBER] - Miliseconds divided by 1000
+    Parent      [ENTITY] - Where movement will be relative to, for pintle mounts and the like
+    GunIndex    [NUMBER] - My addition? The index of the gun's hologram
+    RingIndex   [NUMBER] - My addition? The index of the gun's ring hologram
+    IgnoreHoloM [NUMBER] - My addition- Set to 0 for both holos, 1 for only gun, 2 to do nothing
+Return:
+    [ANGLE] - Angle to feed back into the function via FloatingAngle
+]#
+function angle entity:renHPTLAim(Min:angle,Max:angle,FloatingAngle:angle,DegreesPerSecond:angle,Aimpos:vector,Timestep:number,Parent:entity,GunIndex:number,RingIndex:number,IgnoreHoloM:number)
+{
+    if(IgnoreHoloM!=2)
+    {
+        local GunPos = This:massCenter()
+        local Speed = Timestep * DegreesPerSecond
+        local AngleInput = clamp(-heading(GunPos,Parent:toWorld(FloatingAngle),Aimpos),-Speed,Speed)
+        FloatingAngle = FloatingAngle:rotateAroundAxis(FloatingAngle:up(),AngleInput[2])
+        FloatingAngle = FloatingAngle:rotateAroundAxis(FloatingAngle:right(),-AngleInput[1])
+        FloatingAngle = clamp(FloatingAngle,Min,Max)
+        local LocalAng = Parent:toWorld(FloatingAngle)
+
+        if(IgnoreHoloM != 1) {holoAng(RingIndex,Parent:toWorld(ang(0,LocalAng:yaw(),0)+ang(0,Parent:angles():yaw()*-1,0)))}
+        holoAng(GunIndex,LocalAng)
+    }
+
+    return FloatingAngle
+}
+
+#[Extremely simple traverse sound volume thing
+Inputs:
+    [ENTITY] - The entity that will be referenced
+    SoundIndex [NUMBER] - The index of the sound to be modified
+    Aimpos     [VECTOR] - Aimpos to compare
+]#
+function void entity:renHPTLTraverseSound(SoundIndex:number,Aimpos:vector)
+{
+    soundVolume(SoundIndex,clamp(abs(vec(This:heading(Aimpos)):length())/RenHPTL_VolumeDivisor,0,RenHPTL_MaxVolume))
+}
+
+#[Extremely simple traverse sound volume thing (Now using string sound index!)
+Inputs:
+    [ENTITY] - The entity that will be referenced
+    SoundIndex [STRING] - The index of the sound to be modified
+    Aimpos     [VECTOR] - Aimpos to compare
+]#
+function void entity:renHPTLTraverseSound(SoundIndex:string,Aimpos:vector)
+{
+    soundVolume(SoundIndex,clamp(abs(vec(This:heading(Aimpos)):length())/RenHPTL_VolumeDivisor,0,RenHPTL_MaxVolume))
+}
+
+#[Outputs the amount of time to wait before playing a sound (For reloading)
+Inputs:
+    [ENTITY] - The acf weapon to be checked
+    SoundDuration [NUMBER] - The duration of the sound to be used
+Return:
+    [NUMBER] - The amount of time (Converted to ms for convienience) to wait to play the reload sound
+]#
+function number entity:renHPTLReloadSoundTime(SoundDuration:number)
+{
+    local ReloadTime = This:acfReloadTime()
+    if(This:acfMagSize()>1) {ReloadTime = This:acfMagReloadTime()}
+    return This:acfIsReloading()&(This:acfAmmoCount()>0) ? (ReloadTime-SoundDuration)*1000 : -1
+}
